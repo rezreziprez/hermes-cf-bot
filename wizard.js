@@ -22,7 +22,7 @@ async function handleDeploy(request) {
   const accountId = url.searchParams.get('accountId');
   if (!token || !accountId) return Response.json({ success: false, errors: [{ message: 'Missing' }] });
   const cfUrl = 'https://api.cloudflare.com/client/v4/accounts/' + accountId + '/workers/scripts/hermes-bot';
-  const res = await fetch(cfUrl, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token }, body: request.body });
+  const res = await fetch(cfUrl, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': request.headers.get('Content-Type') || 'multipart/form-data' }, body: request.body });
   const json = await res.json();
   return Response.json(json);
 }
