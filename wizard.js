@@ -170,20 +170,6 @@ async function cfProxy(path,method,data){
   return json;
 }
 
-// Direct CF API call (for endpoints that need special handling)
-async function cfDirect(endpoint,method,body){
-  const tk=$('cfToken').value.trim();
-  const aid=window._cfAccountId;
-  if(!aid)throw new Error('Account ID not set');
-  const url='https://api.cloudflare.com/client/v4/accounts/'+aid+'/'+endpoint;
-  const opts={method,headers:{'Authorization':'Bearer '+tk,'Content-Type':'application/json'}};
-  if(body)opts.body=JSON.stringify(body);
-  const r=await fetch(url,opts);
-  const j=await r.json();
-  if(!j.success)throw new Error(j.errors?.[0]?.message||'CF Direct Error: '+JSON.stringify(j));
-  return j;
-}
-
 async function deploy(){
   const btn=$('runBtn');btn.disabled=true;
   const tgToken=$('tgToken').value.trim();
@@ -218,7 +204,7 @@ async function deploy(){
 
     // 2. Create tables
     st('Creating database tables...','ld');logMsg('Creating tables...','i');
-    await cfDirect('d1/database/'+dbId+'/query','POST',{sql:"CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);CREATE TABLE IF NOT EXISTS users (chat_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, system_prompt TEXT, model TEXT DEFAULT 'gpt-4o-mini', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));"});
+    await cfProxy('d1/database/'+dbId+'/query','POST',{sql:"CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);CREATE TABLE IF NOT EXISTS users (chat_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, system_prompt TEXT, model TEXT DEFAULT 'gpt-4o-mini', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));"});
     logMsg('Tables created','d');
 
     // 3. Create KV Namespace
@@ -250,7 +236,7 @@ async function deploy(){
       {name:'SYSTEM_PROMPT',text:aiPrompt}
     ];
     for(const s of secrets){
-      const sr=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/secrets',{method:'PUT',headers:{'Authorization':'Bearer '+$('cfToken').value.trim(),'Content-Type':'application/json'},body:JSON.stringify(s)});
+      const sr=await cfProxy('workers/scripts/hermes-bot/secrets','PUT',s);
       const sj=await sr.json();
       if(sj.success){logMsg('Secret set: '+s.name,'d');}else{logMsg('Secret failed: '+s.name+' — '+(sj.errors?.[0]?.message||'unknown'),'e');}
     }
@@ -258,14 +244,14 @@ async function deploy(){
     // 6. Enable workers.dev
     st('Enabling workers.dev...','ld');logMsg('Enabling workers.dev...','i');
     try{
-      await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/subdomain',{method:'POST',headers:{'Authorization':'Bearer '+$('cfToken').value.trim(),'Content-Type':'application/json'},body:JSON.stringify({enabled:true})});
+      await cfProxy('workers/scripts/hermes-bot/subdomain','POST',{enabled:true});
       logMsg('workers.dev enabled','d');
     }catch(e){logMsg('workers.dev: '+e.message,'e')}
 
     // 7. Get worker URL + setup webhook
     st('Setting up Telegram webhook...','ld');logMsg('Getting worker URL...','i');
     await new Promise(r=>setTimeout(r,2000));
-    const sub=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/subdomain',{headers:{'Authorization':'Bearer '+$('cfToken').value.trim()}});
+    const sub=await cfProxy('workers/scripts/hermes-bot/subdomain','GET');
     const sd2=await sub.json();
     let workerUrl='';
     if(sd2.result&&sd2.result.enabled){
@@ -311,9 +297,8 @@ async function handleProxy(request) {
   if (data && method !== 'GET') { opts.body = JSON.stringify(data); }
   const cfUrl = 'https://api.cloudflare.com/client/v4/' + (accountId ? 'accounts/' + accountId + '/' : '') + path;
   const res = await fetch(cfUrl, opts);
-  const text = await res.text();
-  // Return as-is (some CF endpoints return non-standard JSON)
-  return new Response(text, { headers: { 'Content-Type': 'application/json' } });
+  const json = await res.json();
+  return Response.json(json);
 }
 
 export default {
