@@ -220,7 +220,7 @@ async function deploy(){
     const fd=new FormData();
     fd.append('main.js',new Blob([BOT_CODE],{type:'application/javascript'}),'main.js');
     fd.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}),'metadata.json');
-    const dr=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot',{method:'PUT',headers:{'Authorization':'Bearer '+$('cfToken').value.trim()},body:fd});
+    const dr=await fetch('/deploy?token='+encodeURIComponent($('cfToken').value.trim())+'&accountId='+window._cfAccountId,{method:'PUT',body:fd});
     const dd=await dr.json();
     if(!dd.success)throw new Error(dd.errors?.[0]?.message||'Deploy failed');
     logMsg('Worker deployed!','d');
@@ -287,6 +287,24 @@ async function deploy(){
 
 // ===================== WIZARD WORKER =====================
 
+
+// Deploy handler - forwards FormData to CF API
+async function handleDeploy(request) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token');
+  const accountId = url.searchParams.get('accountId');
+  if (!token || !accountId) throw new Error('Missing token or accountId');
+
+  const cfUrl = 'https://api.cloudflare.com/client/v4/accounts/' + accountId + '/workers/scripts/hermes-bot';
+  const res = await fetch(cfUrl, {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: request.body,
+  });
+  const json = await res.json();
+  return Response.json(json);
+}
+
 async function handleProxy(request) {
   const body = await request.json();
   const { path, method, data, token, accountId } = body;
@@ -308,6 +326,12 @@ export default {
     // Proxy CF API calls (fixes CORS)
     if (url.pathname === '/api' && request.method === 'POST') {
       try { return await handleProxy(request); }
+      catch (e) { return Response.json({ success: false, errors: [{ message: e.message }] }); }
+    }
+
+    // Deploy endpoint - forwards FormData directly to CF API
+    if (url.pathname === '/deploy' && request.method === 'POST') {
+      try { return await handleDeploy(request); }
       catch (e) { return Response.json({ success: false, errors: [{ message: e.message }] }); }
     }
 
