@@ -32,7 +32,17 @@ async function handleUpdate(update, env) {
     const model = settings?.model || env.MODEL_NAME || 'gpt-4o-mini';
     const base = env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
     const res = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.OPENAI_API_KEY }, body: JSON.stringify({ model, messages: [{ role: 'system', content: sysPrompt }, ...history], max_tokens: 2048, temperature: 0.7 }) });
-    const data = await res.json();
+    const raw = await res.text();
+    var data;
+    try { data = JSON.parse(raw); } catch(e) { 
+      var lines = raw.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith('data: ') && !lines[i].includes('[DONE]')) {
+          try { data = JSON.parse(lines[i].slice(6)); break; } catch(e2) {}
+        }
+      }
+      if (!data) data = {error: raw.substring(0, 200)};
+    }
     const reply = data.choices?.[0]?.message?.content || (data.error ? JSON.stringify(data.error) : 'No response.');
     await saveMsg(env, chatId, 'assistant', reply);
     return send(env, chatId, reply);
