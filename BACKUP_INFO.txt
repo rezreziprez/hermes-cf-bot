@@ -1,0 +1,40 @@
+Hermes CF Bot - Backup
+Date: 2026-08-05
+Git: https://github.com/rezreziprez/hermes-cf-bot
+Latest commit: 565939f (Bot v2: Agent mode)
+
+Files:
+- bot.js (6.2KB) - Agent bot with multi-model support
+- wizard_final.js - Auto-deploy wizard
+- wizard.js - Copy of wizard_final.js
+- src/ - TypeScript source (not used in deployment)
+- schema.sql - D1 database schema
+- wrangler.toml - Cloudflare config template
+
+Deployment:
+- Bot: https://hermes-bot.r65.workers.dev
+- Wizard: https://wiz-880yq15o.r65.workers.dev
+- D1: 1c3cf523-43e9-4800-b682-cb091f554ee4
+- KV: 8c444d7ba2be4f1dab7e022782b31279
+
+Secrets (in Cloudflare Dashboard):
+- TELEGRAM_BOT_TOKEN
+- ADMIN_CHAT_ID
+- OPENAI_API_KEY
+- OPENAI_BASE_URL
+- MODEL_NAME
+- SYSTEM_PROMPT
+
+Models:
+1. gemini/gemini-3.5-flash-lite (default)
+2. Xk/qwen/qwen3.8-max
+3. Xk/deepseek/deepseek-v4-flash
+4. Xk/xiaomi/mimo-v2.5:free
+5. gemini/gemma-4-31b-it
+
+Features:
+- /start, /models, /model, /clear, /system, /settings
+- Multi-model switching
+- SSE response parsing
+- D1 conversation history
+- Admin access control
