@@ -1,0 +1,22 @@
+name = "hermes-cf-bot"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+# اینا رو بعد از ساخت D1 و KV پر کن
+# TELEGRAM_BOT_TOKEN = "token بات تلگرام"
+# OPENAI_API_KEY = "کلید API"
+# OPENAI_BASE_URL = "https://api.openai.com/v1"
+# MODEL_NAME = "gpt-4o-mini"
+# SYSTEM_PROMPT = "You are a helpful AI assistant."
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "hermes-db"
+database_id = "YOUR_D1_DATABASE_ID"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "KV"
+id = "YOUR_KV_NAMESPACE_ID"
