@@ -29,9 +29,9 @@ async function handleUpdate(update, env) {
   const settings = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first();
   try {
     const sysPrompt = settings?.system_prompt || env.SYSTEM_PROMPT || 'You are a helpful assistant.';
-    const model = settings?.model || env.MODEL_NAME || 'gpt-4o-mini';
+    const model = settings?.model || env.MODEL_NAME || 'gemini/gemini-3.5-flash-lite';
     const base = env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-    const res = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.OPENAI_API_KEY }, body: JSON.stringify({ model, messages: [{ role: 'system', content: sysPrompt }, ...history], max_tokens: 2048, temperature: 0.7 }) });
+    const res = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.OPENAI_API_KEY }, body: JSON.stringify({ model, messages: [{ role: 'system', content: sysPrompt }, ...history], max_tokens: 2048, temperature: 0.7, stream: false }) });
     const raw = await res.text();
     var data;
     try { data = JSON.parse(raw); } catch(e) { 
