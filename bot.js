@@ -113,19 +113,28 @@ async function handleUpdate(update, env) {
     return;
   }
 
-  // Image generation
+  // Image generation - /img, /img1-5
   if (text.startsWith('/img')) {
-    const prompt = text.replace('/img', '').trim();
-    if (!prompt) return send(env, chatId, 'Use: /img [description]\nExample: /img a cat wearing sunglasses');
+    const parts = text.split(' ');
+    const cmd = parts[0];
+    const prompt = parts.slice(1).join(' ');
+    const modelMap = {'/img1': 'flux-realism', '/img2': 'flux-anime', '/img3': 'flux-3d', '/img4': 'turbo', '/img5': 'sana'};
+    const model = modelMap[cmd];
+    if (!prompt && cmd === '/img') return send(env, chatId, 'Use: /img [description]\n\nModels:\n/img1 - Flux Realistic\n/img2 - Flux Anime\n/img3 - Flux 3D\n/img4 - Turbo (fast)\n/img5 - Sana\n\nDefault: /img = Flux');
+    if (!prompt) return send(env, chatId, 'Provide description.');
     await typing(env, chatId);
     try {
-      const imgUrl = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&nologo=true&seed=' + Math.floor(Math.random() * 999999);
-      await sendPhoto(env, chatId, imgUrl, 'Generated: ' + prompt);
+      const seed = Math.floor(Math.random() * 999999);
+      const modelParam = model ? '&model=' + model : '';
+      const label = model ? '[' + model + '] ' : '[flux] ';
+      const imgUrl = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&nologo=true' + modelParam + '&seed=' + seed;
+      await sendPhoto(env, chatId, imgUrl, label + prompt);
     } catch (e) {
       await send(env, chatId, 'Image error: ' + e.message);
     }
     return;
   }
+
 
   if (text.startsWith('/system')) {
     const p = text.replace('/system', '').trim();
