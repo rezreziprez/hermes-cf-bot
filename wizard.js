@@ -1,8 +1,11 @@
 // =============================================================
 //  Hermes CF Bot — Self-Deploying Wizard (English UI)
 //  Built by iprez
-//  Upload to Cloudflare Worker → Open URL → Done!
+//  Upload to Cloudflare Worker -> Open URL -> Done!
 // =============================================================
+
+// ===================== BOT CODE =====================
+// This is the code that gets deployed as a separate worker
 
 const BOT_CODE = `
 export default {
@@ -19,7 +22,7 @@ export default {
         return new Response('Error', { status: 500 });
       }
     }
-    return new Response('Hermes CF Bot — Built by iprez', { status: 200 });
+    return new Response('Hermes CF Bot by iprez', { status: 200 });
   },
 };
 
@@ -29,6 +32,14 @@ async function handleUpdate(update, env) {
   const chatId = msg.chat.id;
   const text = msg.text.trim();
   const name = msg.chat.first_name || 'User';
+
+  // Admin check
+  const adminId = env.ADMIN_CHAT_ID;
+  if (adminId && chatId !== Number(adminId)) {
+    await send(env, chatId, 'Access denied.');
+    return;
+  }
+
   await upsertUser(env, chatId, msg.chat.username, name);
 
   if (text === '/start') return send(env, chatId, 'Hi ' + name + '!\\n\\nI am an AI assistant.\\n\\nCommands:\\n/clear — Clear history\\n/system [text] — Set system prompt\\n/model [name] — Change model\\n/settings — Show settings');
@@ -66,40 +77,7 @@ async function getHistory(env, chatId, limit) { const { results } = await env.DB
 async function upsertUser(env, chatId, username, firstName) { await env.DB.prepare("INSERT INTO users (chat_id, username, first_name, updated_at) VALUES (?, ?, ?, datetime('now')) ON CONFLICT(chat_id) DO UPDATE SET username=excluded.username, first_name=excluded.first_name, updated_at=datetime('now')").bind(chatId, username||null, firstName||null).run(); }
 `;
 
-// ===================== PROXY HANDLER =====================
-// All CF API calls go through the Worker (fixes CORS)
-
-async function handleProxy(request) {
-  const body = await request.json();
-  const { path, method, data, token, accountId } = body;
-
-  const opts = {
-    method: method || 'GET',
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-    },
-  };
-
-  // For FormData uploads (worker deploy)
-  if (data && typeof data === 'object' && data._multipart) {
-    const fd = new FormData();
-    for (const part of data._parts) {
-      fd.append(part.name, new Blob([part.content], { type: part.type }), part.filename);
-    }
-    opts.body = fd;
-    delete opts.headers['Content-Type'];
-  } else if (data && method !== 'GET') {
-    opts.body = JSON.stringify(data);
-  }
-
-  const url = 'https://api.cloudflare.com/client/v4/accounts/' + accountId + '/' + path;
-  const res = await fetch(url, opts);
-  const json = await res.json();
-  return Response.json(json);
-}
-
-// ===================== HTML WIZARD PAGE =====================
+// ===================== WIZARD PAGE (HTML) =====================
 
 function wizardPage() {
   return `<!DOCTYPE html>
@@ -155,9 +133,10 @@ a{color:#6366f1;text-decoration:none}a:hover{text-decoration:underline}
     <div class="info">Your token is used only to create resources. It is never stored on any server.</div>
   </div>
 
-  <!-- STEP 2: Telegram + AI -->
+  <!-- STEP 2: Telegram + AI + Admin -->
   <div class="s" id="s2">
     <div class="fg"><label>Telegram Bot Token</label><input type="text" id="tgToken" placeholder="1234567890:ABCdef..."><p class="ht">Get from <a href="https://t.me/BotFather" target="_blank">@BotFather</a></p></div>
+    <div class="fg"><label>Admin Chat ID (Your Telegram numeric ID)</label><input type="text" id="adminId" placeholder="123456789"><p class="ht">Get from <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> — Only this user can use the bot</p></div>
     <div class="fg"><label>AI API Key</label><input type="text" id="aiKey" placeholder="sk-xxx..."></div>
     <div class="fg"><label>API Base URL</label><input type="text" id="aiUrl" value="https://9router-production-d4c69.up.railway.app/v1"></div>
     <div class="fg"><label>Model Name</label><input type="text" id="aiModel" value="vipai"></div>
@@ -180,12 +159,7 @@ a{color:#6366f1;text-decoration:none}a:hover{text-decoration:underline}
 <script>
 const $ = id => document.getElementById(id);
 function toStep(n){document.querySelectorAll('.s').forEach(x=>x.classList.remove('on'));$('s'+n).classList.add('on')}
-
-function logMsg(msg,type){
-  const el=$('log');el.style.display='block';
-  const d=document.createElement('div');d.className=type||'i';d.textContent=msg;el.appendChild(d);el.scrollTop=el.scrollHeight;
-}
-
+function logMsg(msg,type){const el=$('log');el.style.display='block';const d=document.createElement('div');d.className=type||'i';d.textContent=msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
 function st(msg,type){const el=$('sts');el.className='st '+(type||'ld');el.innerHTML=type==='ld'?msg+'<span class="sp"></span>':msg}
 
 async function cf(path,method,data){
@@ -193,53 +167,49 @@ async function cf(path,method,data){
   if(!tk)throw new Error('Please enter your API Token');
   const res=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,method,data,token:tk,accountId:window._cfAccountId})});
   const json=await res.json();
-  // Cache account ID
-  if(path==='accounts'&&json.result&&json.result.length){
-    window._cfAccountId=json.result[0].id;
-  }
-  if(!json.success){
-    throw new Error(json.errors?.[0]?.message||'Cloudflare API Error');
-  }
+  if(path==='accounts'&&json.result&&json.result.length){window._cfAccountId=json.result[0].id;}
+  if(!json.success){throw new Error(json.errors?.[0]?.message||'Cloudflare API Error');}
   return json;
 }
 
 async function deploy(){
   const btn=$('runBtn');btn.disabled=true;
   const tgToken=$('tgToken').value.trim();
+  const adminId=$('adminId').value.trim();
   const aiKey=$('aiKey').value.trim();
   const aiUrl=$('aiUrl').value.trim();
   const aiModel=$('aiModel').value.trim();
   const aiPrompt=$('aiPrompt').value.trim();
 
-  if(!$('cfToken').value.trim()||!tgToken||!aiKey){st('Please fill all fields.','err');btn.disabled=false;return}
+  if(!$('cfToken').value.trim()||!tgToken||!adminId||!aiKey){st('Please fill all required fields.','err');btn.disabled=false;return}
 
   try{
     // 0. Get Account ID
-    st('Getting Cloudflare Account ID...','ld');logMsg('Fetching account info...','i');
-    const accRes = await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'accounts',method:'GET',token:$('cfToken').value.trim()})});
-    const accData = await accRes.json();
+    st('Getting Account ID...','ld');logMsg('Fetching account info...','i');
+    const accRes=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'accounts',method:'GET',token:$('cfToken').value.trim()})});
+    const accData=await accRes.json();
     if(!accData.success||!accData.result||!accData.result.length) throw new Error('Account not found. Check your API Token.');
     window._cfAccountId=accData.result[0].id;
     logMsg('Account ID: '+window._cfAccountId,'d');
 
-    // 1. Create D1 Database
+    // 1. Create D1
     st('Creating D1 Database...','ld');logMsg('Creating D1 database...','i');
     const d1=await cf('d1/database','POST',{name:'hermes-db-'+Date.now()});
     const dbId=d1.result.id;
     logMsg('D1 created: '+dbId,'d');
 
-    // 2. Create D1 tables
-    st('Creating database tables...','ld');logMsg('Creating tables...','i');
+    // 2. Create tables
+    st('Creating tables...','ld');logMsg('Creating tables...','i');
     await cf('d1/database/'+dbId+'/query','POST',{sql:"CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);CREATE TABLE IF NOT EXISTS users (chat_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, system_prompt TEXT, model TEXT DEFAULT 'gpt-4o-mini', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));"});
     logMsg('Tables created','d');
 
-    // 3. Create KV Namespace
+    // 3. Create KV
     st('Creating KV Namespace...','ld');logMsg('Creating KV namespace...','i');
     const kv=await cf('storage/kv/namespaces','POST',{title:'hermes-kv-'+Date.now()});
     const kvId=kv.result.id;
     logMsg('KV created: '+kvId,'d');
 
-    // 4. Deploy Worker
+    // 4. Deploy Worker (direct API call for multipart)
     st('Deploying Worker...','ld');logMsg('Deploying worker...','i');
     const meta={main_module:'main.js',bindings:[{name:'DB',type:'d1_database',id:dbId},{name:'KV',type:'kv_namespace',namespace_id:kvId}],compatibility_date:'2024-12-01'};
     const fd=new FormData();
@@ -250,29 +220,30 @@ async function deploy(){
     if(!dd.success)throw new Error(dd.errors?.[0]?.message||'Deploy failed');
     logMsg('Worker deployed!','d');
 
-    // 5. Set secrets
+    // 5. Set secrets (including ADMIN_CHAT_ID)
     st('Setting secrets...','ld');logMsg('Setting secrets...','i');
     const secrets=[
       {name:'TELEGRAM_BOT_TOKEN',text:tgToken},
+      {name:'ADMIN_CHAT_ID',text:adminId},
       {name:'OPENAI_API_KEY',text:aiKey},
       {name:'OPENAI_BASE_URL',text:aiUrl},
       {name:'MODEL_NAME',text:aiModel},
       {name:'SYSTEM_PROMPT',text:aiPrompt}
     ];
     for(const s of secrets){
-      await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/secrets',{method:'PUT',headers:{'Authorization':'Bearer '+$('cfToken').value.trim(),'Content-Type':'application/json'},body:JSON.stringify(s)});
-      logMsg('Secret set: '+s.name,'d');
+      const sr=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/secrets',{method:'PUT',headers:{'Authorization':'Bearer '+$('cfToken').value.trim(),'Content-Type':'application/json'},body:JSON.stringify(s)});
+      const sj=await sr.json();
+      if(sj.success){logMsg('Secret set: '+s.name,'d');}else{logMsg('Secret failed: '+s.name+' — '+(sj.errors?.[0]?.message||'unknown'),'e');}
     }
 
     // 6. Enable workers.dev
     st('Enabling workers.dev...','ld');logMsg('Enabling workers.dev...','i');
     try{
-      const sd=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/subdomain',{method:'POST',headers:{'Authorization':'Bearer '+$('cfToken').value.trim(),'Content-Type':'application/json'},body:JSON.stringify({enabled:true})});
-      await sd.json();
+      await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/subdomain',{method:'POST',headers:{'Authorization':'Bearer '+$('cfToken').value.trim(),'Content-Type':'application/json'},body:JSON.stringify({enabled:true})});
       logMsg('workers.dev enabled','d');
     }catch(e){logMsg('workers.dev: '+e.message,'e')}
 
-    // 7. Get worker URL and setup webhook
+    // 7. Get worker URL + setup webhook
     st('Setting up Telegram webhook...','ld');logMsg('Getting worker URL...','i');
     const sub=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/subdomain',{headers:{'Authorization':'Bearer '+$('cfToken').value.trim()}});
     const sd2=await sub.json();
@@ -280,16 +251,13 @@ async function deploy(){
     if(sd2.result&&sd2.result.enabled){
       workerUrl='https://hermes-bot.'+sd2.result.preview_id+'.workers.dev';
     }
+    if(!workerUrl) throw new Error('Could not get worker URL. Check Cloudflare Dashboard.');
     logMsg('Worker URL: '+workerUrl,'i');
 
     const webhookUrl=workerUrl+'/webhook';
     const wRes=await fetch('https://api.telegram.org/bot'+tgToken+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:webhookUrl,allowed_updates:['message']})});
     const wData=await wRes.json();
-    if(wData.ok){
-      logMsg('Webhook set: '+webhookUrl,'d');
-    }else{
-      logMsg('Webhook warning: '+JSON.stringify(wData),'e');
-    }
+    if(wData.ok){logMsg('Webhook set: '+webhookUrl,'d');}else{logMsg('Webhook error: '+JSON.stringify(wData),'e');}
 
     // Done!
     st('','ok');
@@ -307,52 +275,37 @@ async function deploy(){
 </html>`;
 }
 
-// ===================== WIZARD WORKER =====================
-
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
-
-    // Proxy API calls (fixes CORS)
-    if (url.pathname === '/api' && request.method === 'POST') {
-      try {
-        return await handleProxy(request);
-      } catch (e) {
-        return Response.json({ success: false, errors: [{ message: e.message }] });
-      }
-    }
-
-    // Serve wizard page
-    if (url.pathname === '/' || url.pathname === '/setup') {
-      return new Response(wizardPage(), {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
-    }
-
-    return new Response('Not found', { status: 404 });
-  },
-};
-
-// ===================== PROXY HANDLER =====================
+// ===================== WIZARD WORKER (single fetch handler) =====================
 
 async function handleProxy(request) {
   const body = await request.json();
   const { path, method, data, token, accountId } = body;
-
   const opts = {
     method: method || 'GET',
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
   };
-
-  if (data && method !== 'GET') {
-    opts.body = JSON.stringify(data);
-  }
-
+  if (data && method !== 'GET') { opts.body = JSON.stringify(data); }
   const cfUrl = 'https://api.cloudflare.com/client/v4/' + (accountId ? 'accounts/' + accountId + '/' : '') + path;
   const res = await fetch(cfUrl, opts);
   const json = await res.json();
   return Response.json(json);
 }
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    // Proxy CF API calls (fixes CORS)
+    if (url.pathname === '/api' && request.method === 'POST') {
+      try { return await handleProxy(request); }
+      catch (e) { return Response.json({ success: false, errors: [{ message: e.message }] }); }
+    }
+
+    // Serve wizard HTML
+    if (url.pathname === '/' || url.pathname === '/setup') {
+      return new Response(wizardPage(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+
+    return new Response('Not found', { status: 404 });
+  },
+};
