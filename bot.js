@@ -118,9 +118,9 @@ async function handleUpdate(update, env) {
     const parts = text.split(' ');
     const cmd = parts[0];
     const prompt = parts.slice(1).join(' ');
-    const modelMap = {'/img1': 'flux-realism', '/img2': 'flux-anime', '/img3': 'flux-3d', '/img4': 'turbo', '/img5': 'sana'};
+    const modelMap = {'/img1': 'flux-realism', '/img2': 'flux-anime', '/img3': 'flux-3d', '/img4': 'turbo', '/img5': 'sana', '/img6': 'flux-schnell', '/img7': 'flux-pro', '/img8': 'stable-diffusion-xl', '/img9': 'playground-v2.5', '/img10': 'kandinsky-3'};
     const model = modelMap[cmd];
-    if (!prompt && cmd === '/img') return send(env, chatId, 'Use: /img [description]\n\nModels:\n/img1 - Flux Realistic\n/img2 - Flux Anime\n/img3 - Flux 3D\n/img4 - Turbo (fast)\n/img5 - Sana\n\nDefault: /img = Flux');
+    if (!prompt && cmd === '/img') return send(env, chatId, 'Image models:\n/img1 - Flux Realistic\n/img2 - Flux Anime\n/img3 - Flux 3D\n/img4 - Turbo (fast)\n/img5 - Sana\n/img6 - Flux Schnell\n/img7 - Flux Pro\n/img8 - SDXL\n/img9 - Playground 2.5\n/img10 - Kandinsky 3\n\nDefault: /img = Flux');
     if (!prompt) return send(env, chatId, 'Provide description.');
     await typing(env, chatId);
     try {
