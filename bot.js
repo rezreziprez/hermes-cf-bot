@@ -23,7 +23,7 @@ async function handleUpdate(update, env) {
   if (text === '/clear') { await env.DB.prepare('DELETE FROM messages WHERE chat_id = ?').bind(chatId).run(); return send(env, chatId, 'History cleared.'); }
   if (text.startsWith('/system')) { const p = text.replace('/system','').trim(); if(!p) return send(env,chatId,'Provide a prompt.'); await env.DB.prepare('UPDATE users SET system_prompt = ? WHERE chat_id = ?').bind(p,chatId).run(); return send(env,chatId,'Prompt set.'); }
   if (text.startsWith('/model')) { const m = text.replace('/model','').trim(); if(!m) return send(env,chatId,'Provide model name.'); await env.DB.prepare('UPDATE users SET model = ? WHERE chat_id = ?').bind(m,chatId).run(); return send(env,chatId,'Model: '+m); }
-  if (text === '/settings') { const s = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first(); return send(env,chatId,'Model: '+(s?.model||'default')+' Prompt: '+(s?.system_prompt||'default')); }
+  if (text === '/settings') { const s = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first(); return send(env,chatId,'Model: '+(s?.model||env.MODEL_NAME||'default')+'\nPrompt: '+(s?.system_prompt||env.SYSTEM_PROMPT||'default')+'\nAPI: '+(env.OPENAI_BASE_URL||'default')); }
   await saveMsg(env, chatId, 'user', text);
   const history = await getHistory(env, chatId, 20);
   const settings = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first();
@@ -33,7 +33,7 @@ async function handleUpdate(update, env) {
     const base = env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
     const res = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.OPENAI_API_KEY }, body: JSON.stringify({ model, messages: [{ role: 'system', content: sysPrompt }, ...history], max_tokens: 2048, temperature: 0.7 }) });
     const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content || 'No response.';
+    const reply = data.choices?.[0]?.message?.content || (data.error ? JSON.stringify(data.error) : 'No response.');
     await saveMsg(env, chatId, 'assistant', reply);
     return send(env, chatId, reply);
   } catch (e) { return send(env, chatId, 'Error: ' + e.message); }
