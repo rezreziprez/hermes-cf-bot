@@ -1,12 +1,10 @@
 // =============================================================
-//  Hermes CF Bot — Self-Deploying Wizard (English UI)
+//  Hermes CF Bot — Self-Deploying Wizard v3 (English UI)
 //  Built by iprez
 //  Upload to Cloudflare Worker -> Open URL -> Done!
 // =============================================================
 
 // ===================== BOT CODE =====================
-// This is the code that gets deployed as a separate worker
-
 const BOT_CODE = `
 export default {
   async fetch(request, env) {
@@ -35,18 +33,18 @@ async function handleUpdate(update, env) {
 
   // Admin check
   const adminId = env.ADMIN_CHAT_ID;
-  if (adminId && chatId !== Number(adminId)) {
-    await send(env, chatId, 'Access denied.');
+  if (adminId && String(chatId) !== String(adminId)) {
+    await send(env, chatId, '⛔ Access denied.');
     return;
   }
 
   await upsertUser(env, chatId, msg.chat.username, name);
 
-  if (text === '/start') return send(env, chatId, 'Hi ' + name + '!\\n\\nI am an AI assistant.\\n\\nCommands:\\n/clear — Clear history\\n/system [text] — Set system prompt\\n/model [name] — Change model\\n/settings — Show settings');
-  if (text === '/clear') { await env.DB.prepare('DELETE FROM messages WHERE chat_id = ?').bind(chatId).run(); return send(env, chatId, 'History cleared.'); }
-  if (text.startsWith('/system')) { const p = text.replace('/system','').trim(); if(!p) return send(env,chatId,'Please provide a prompt.'); await env.DB.prepare('UPDATE users SET system_prompt = ? WHERE chat_id = ?').bind(p,chatId).run(); return send(env,chatId,'System prompt set.'); }
-  if (text.startsWith('/model')) { const m = text.replace('/model','').trim(); if(!m) return send(env,chatId,'Please provide a model name.'); await env.DB.prepare('UPDATE users SET model = ? WHERE chat_id = ?').bind(m,chatId).run(); return send(env,chatId,'Model changed to: '+m); }
-  if (text === '/settings') { const s = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first(); return send(env,chatId,'Model: '+(s?.model||'default')+'\\nPrompt: '+(s?.system_prompt||'default')); }
+  if (text === '/start') return send(env, chatId, 'Hi ' + name + '!\\\\n\\\\nI am an AI assistant.\\\\n\\\\nCommands:\\\\n/clear — Clear history\\\\n/system [text] — Set system prompt\\\\n/model [name] — Change model\\\\n/settings — Show settings');
+  if (text === '/clear') { await env.DB.prepare('DELETE FROM messages WHERE chat_id = ?').bind(chatId).run(); return send(env, chatId, '✅ History cleared.'); }
+  if (text.startsWith('/system')) { const p = text.replace('/system','').trim(); if(!p) return send(env,chatId,'❌ Please provide a prompt.'); await env.DB.prepare('UPDATE users SET system_prompt = ? WHERE chat_id = ?').bind(p,chatId).run(); return send(env,chatId,'✅ System prompt set.'); }
+  if (text.startsWith('/model')) { const m = text.replace('/model','').trim(); if(!m) return send(env,chatId,'❌ Please provide a model name.'); await env.DB.prepare('UPDATE users SET model = ? WHERE chat_id = ?').bind(m,chatId).run(); return send(env,chatId,'✅ Model changed to: '+m); }
+  if (text === '/settings') { const s = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first(); return send(env,chatId,'⚙️ Model: '+(s?.model||'default')+'\\\\nPrompt: '+(s?.system_prompt||'default')); }
 
   await saveMsg(env, chatId, 'user', text);
   const history = await getHistory(env, chatId, 20);
@@ -64,12 +62,12 @@ async function handleUpdate(update, env) {
     const reply = data.choices?.[0]?.message?.content || 'No response received.';
     await saveMsg(env, chatId, 'assistant', reply);
     return send(env, chatId, reply);
-  } catch (e) { return send(env, chatId, 'Error: ' + e.message); }
+  } catch (e) { return send(env, chatId, '❌ Error: ' + e.message); }
 }
 
 async function send(env, chatId, text) {
   const chunks = []; let t = text;
-  while (t.length > 0) { if (t.length <= 4000) { chunks.push(t); break; } let c = t.lastIndexOf('\\n', 4000); if (c === -1 || c < 2000) c = 4000; chunks.push(t.slice(0, c)); t = t.slice(c); }
+  while (t.length > 0) { if (t.length <= 4000) { chunks.push(t); break; } let c = t.lastIndexOf('\\\\n', 4000); if (c === -1 || c < 2000) c = 4000; chunks.push(t.slice(0, c)); t = t.slice(c); }
   for (const chunk of chunks) { await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'Markdown' }) }); }
 }
 async function saveMsg(env, chatId, role, content) { await env.DB.prepare('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)').bind(chatId, role, content).run(); }
@@ -120,39 +118,39 @@ a{color:#6366f1;text-decoration:none}a:hover{text-decoration:underline}
 </head>
 <body>
 <div class="c">
-  <div class="h"><h1>Hermes CF Bot</h1><p>One-click installer for Cloudflare Workers</p></div>
+  <div class="h"><h1>⚡ Hermes CF Bot</h1><p>One-click installer for Cloudflare Workers</p></div>
 
   <!-- STEP 1: API Token -->
   <div class="s on" id="s1">
     <div class="fg">
-      <label>Cloudflare API Token</label>
+      <label>🔑 Cloudflare API Token</label>
       <input type="password" id="cfToken" placeholder="Paste your API token here">
-      <p class="ht">Create at <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank">Cloudflare API Tokens</a> with <b>Edit Cloudflare Workers</b> permission</p>
+      <p class="ht">Create at <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank">Cloudflare API Tokens</a> with <b>Edit Cloudflare Workers + D1 + KV</b> permissions</p>
     </div>
-    <button class="btn bp" onclick="toStep(2)">Next Step</button>
-    <div class="info">Your token is used only to create resources. It is never stored on any server.</div>
+    <button class="btn bp" onclick="toStep(2)">Next Step →</button>
+    <div class="info">Your token is sent only to Cloudflare API via this Worker proxy. It is never stored anywhere.</div>
   </div>
 
   <!-- STEP 2: Telegram + AI + Admin -->
   <div class="s" id="s2">
-    <div class="fg"><label>Telegram Bot Token</label><input type="text" id="tgToken" placeholder="1234567890:ABCdef..."><p class="ht">Get from <a href="https://t.me/BotFather" target="_blank">@BotFather</a></p></div>
-    <div class="fg"><label>Admin Chat ID (Your Telegram numeric ID)</label><input type="text" id="adminId" placeholder="123456789"><p class="ht">Get from <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> — Only this user can use the bot</p></div>
-    <div class="fg"><label>AI API Key</label><input type="text" id="aiKey" placeholder="sk-xxx..."></div>
-    <div class="fg"><label>API Base URL</label><input type="text" id="aiUrl" value="https://9router-production-d4c69.up.railway.app/v1"></div>
-    <div class="fg"><label>Model Name</label><input type="text" id="aiModel" value="vipai"></div>
-    <div class="fg"><label>System Prompt</label><textarea id="aiPrompt">You are a helpful AI assistant. Respond in the user's language. Your name is Hermes, built by iprez.</textarea></div>
-    <button class="btn bp" id="runBtn" onclick="deploy()">Deploy Now</button>
-    <button class="btn bb" onclick="toStep(1)">Back</button>
+    <div class="fg"><label>🤖 Telegram Bot Token</label><input type="text" id="tgToken" placeholder="1234567890:ABCdef..."><p class="ht">Get from <a href="https://t.me/BotFather" target="_blank">@BotFather</a></p></div>
+    <div class="fg"><label>👤 Admin Chat ID (Your numeric Telegram ID)</label><input type="text" id="adminId" placeholder="123456789"><p class="ht">Get from <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> — Only this user can use the bot</p></div>
+    <div class="fg"><label>🧠 AI API Key</label><input type="text" id="aiKey" placeholder="sk-xxx..."></div>
+    <div class="fg"><label>🌐 API Base URL</label><input type="text" id="aiUrl" value="https://9router-production-d4c69.up.railway.app/v1"></div>
+    <div class="fg"><label>📦 Model Name</label><input type="text" id="aiModel" value="vipai"></div>
+    <div class="fg"><label>💬 System Prompt</label><textarea id="aiPrompt">You are a helpful AI assistant. Respond in the user's language. Your name is Hermes, built by iprez.</textarea></div>
+    <button class="btn bp" id="runBtn" onclick="deploy()">🚀 Deploy Now</button>
+    <button class="btn bb" onclick="toStep(1)">← Back</button>
     <div class="st" id="sts"></div>
     <div class="log" id="log" style="display:none"></div>
   </div>
 
   <!-- STEP 3: Done -->
   <div class="s" id="s3">
-    <h2 style="text-align:center;color:#22c55e;margin-bottom:16px">Installation Complete!</h2>
+    <h2 style="text-align:center;color:#22c55e;margin-bottom:16px">✅ Installation Complete!</h2>
     <div class="log" id="finalLog"></div>
-    <a class="tg" id="tgLink" href="#" target="_blank">Open Telegram Bot</a>
-    <button class="btn bb" style="margin-top:12px" onclick="location.reload()">Install Again</button>
+    <a class="tg" id="tgLink" href="#" target="_blank">🤖 Open Telegram Bot</a>
+    <button class="btn bb" style="margin-top:12px" onclick="location.reload()">🔄 Install Again</button>
   </div>
 </div>
 
@@ -162,14 +160,28 @@ function toStep(n){document.querySelectorAll('.s').forEach(x=>x.classList.remove
 function logMsg(msg,type){const el=$('log');el.style.display='block';const d=document.createElement('div');d.className=type||'i';d.textContent=msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
 function st(msg,type){const el=$('sts');el.className='st '+(type||'ld');el.innerHTML=type==='ld'?msg+'<span class="sp"></span>':msg}
 
-async function cf(path,method,data){
+// Proxy call through Worker (fixes CORS)
+async function cfProxy(path,method,data){
   const tk=$('cfToken').value.trim();
   if(!tk)throw new Error('Please enter your API Token');
   const res=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path,method,data,token:tk,accountId:window._cfAccountId})});
   const json=await res.json();
-  if(path==='accounts'&&json.result&&json.result.length){window._cfAccountId=json.result[0].id;}
-  if(!json.success){throw new Error(json.errors?.[0]?.message||'Cloudflare API Error');}
+  if(!json.success){throw new Error(json.errors?.[0]?.message||'CF API Error: '+JSON.stringify(json));}
   return json;
+}
+
+// Direct CF API call (for endpoints that need special handling)
+async function cfDirect(endpoint,method,body){
+  const tk=$('cfToken').value.trim();
+  const aid=window._cfAccountId;
+  if(!aid)throw new Error('Account ID not set');
+  const url='https://api.cloudflare.com/client/v4/accounts/'+aid+'/'+endpoint;
+  const opts={method,headers:{'Authorization':'Bearer '+tk,'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(url,opts);
+  const j=await r.json();
+  if(!j.success)throw new Error(j.errors?.[0]?.message||'CF Direct Error: '+JSON.stringify(j));
+  return j;
 }
 
 async function deploy(){
@@ -192,24 +204,31 @@ async function deploy(){
     window._cfAccountId=accData.result[0].id;
     logMsg('Account ID: '+window._cfAccountId,'d');
 
-    // 1. Create D1
+    // 1. Create D1 Database
     st('Creating D1 Database...','ld');logMsg('Creating D1 database...','i');
-    const d1=await cf('d1/database','POST',{name:'hermes-db-'+Date.now()});
-    const dbId=d1.result.id;
+    const d1=await cfProxy('d1/database','POST',{name:'hermes-db-'+Date.now()});
+    logMsg('D1 raw result: '+JSON.stringify(d1.result),'i');
+    // Extract ID — could be result.id, result.uuid, or result[0].id
+    const dbId = d1.result?.id || d1.result?.uuid || (Array.isArray(d1.result)&&d1.result[0]?.id);
+    if(!dbId) throw new Error('D1 created but no ID returned. Raw: '+JSON.stringify(d1.result));
     logMsg('D1 created: '+dbId,'d');
 
+    // Small delay for D1 to propagate
+    await new Promise(r=>setTimeout(r,1500));
+
     // 2. Create tables
-    st('Creating tables...','ld');logMsg('Creating tables...','i');
-    await cf('d1/database/'+dbId+'/query','POST',{sql:"CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);CREATE TABLE IF NOT EXISTS users (chat_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, system_prompt TEXT, model TEXT DEFAULT 'gpt-4o-mini', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));"});
+    st('Creating database tables...','ld');logMsg('Creating tables...','i');
+    await cfDirect('d1/database/'+dbId+'/query','POST',{sql:"CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);CREATE TABLE IF NOT EXISTS users (chat_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, system_prompt TEXT, model TEXT DEFAULT 'gpt-4o-mini', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));"});
     logMsg('Tables created','d');
 
-    // 3. Create KV
+    // 3. Create KV Namespace
     st('Creating KV Namespace...','ld');logMsg('Creating KV namespace...','i');
-    const kv=await cf('storage/kv/namespaces','POST',{title:'hermes-kv-'+Date.now()});
-    const kvId=kv.result.id;
+    const kv=await cfProxy('storage/kv/namespaces','POST',{title:'hermes-kv-'+Date.now()});
+    const kvId=kv.result?.id || kv.result?.uuid;
+    if(!kvId) throw new Error('KV created but no ID returned. Raw: '+JSON.stringify(kv.result));
     logMsg('KV created: '+kvId,'d');
 
-    // 4. Deploy Worker (direct API call for multipart)
+    // 4. Deploy Worker
     st('Deploying Worker...','ld');logMsg('Deploying worker...','i');
     const meta={main_module:'main.js',bindings:[{name:'DB',type:'d1_database',id:dbId},{name:'KV',type:'kv_namespace',namespace_id:kvId}],compatibility_date:'2024-12-01'};
     const fd=new FormData();
@@ -245,13 +264,18 @@ async function deploy(){
 
     // 7. Get worker URL + setup webhook
     st('Setting up Telegram webhook...','ld');logMsg('Getting worker URL...','i');
+    await new Promise(r=>setTimeout(r,2000));
     const sub=await fetch('https://api.cloudflare.com/client/v4/accounts/'+window._cfAccountId+'/workers/scripts/hermes-bot/subdomain',{headers:{'Authorization':'Bearer '+$('cfToken').value.trim()}});
     const sd2=await sub.json();
     let workerUrl='';
     if(sd2.result&&sd2.result.enabled){
       workerUrl='https://hermes-bot.'+sd2.result.preview_id+'.workers.dev';
     }
-    if(!workerUrl) throw new Error('Could not get worker URL. Check Cloudflare Dashboard.');
+    if(!workerUrl){
+      // Fallback: try to construct from account subdomain
+      logMsg('Subdomain response: '+JSON.stringify(sd2),'i');
+      workerUrl='https://hermes-bot.'+window._cfAccountId.split('-')[0]+'.workers.dev';
+    }
     logMsg('Worker URL: '+workerUrl,'i');
 
     const webhookUrl=workerUrl+'/webhook';
@@ -266,7 +290,7 @@ async function deploy(){
     $('tgLink').href='https://t.me/'+tgToken.split(':')[0];
 
   }catch(e){
-    st('Error: '+e.message,'err');logMsg('ERROR: '+e.message,'e');
+    st('❌ '+e.message,'err');logMsg('ERROR: '+e.message,'e');
     btn.disabled=false;
   }
 }
@@ -275,7 +299,7 @@ async function deploy(){
 </html>`;
 }
 
-// ===================== WIZARD WORKER (single fetch handler) =====================
+// ===================== WIZARD WORKER =====================
 
 async function handleProxy(request) {
   const body = await request.json();
@@ -287,8 +311,9 @@ async function handleProxy(request) {
   if (data && method !== 'GET') { opts.body = JSON.stringify(data); }
   const cfUrl = 'https://api.cloudflare.com/client/v4/' + (accountId ? 'accounts/' + accountId + '/' : '') + path;
   const res = await fetch(cfUrl, opts);
-  const json = await res.json();
-  return Response.json(json);
+  const text = await res.text();
+  // Return as-is (some CF endpoints return non-standard JSON)
+  return new Response(text, { headers: { 'Content-Type': 'application/json' } });
 }
 
 export default {
