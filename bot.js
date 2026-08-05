@@ -77,6 +77,10 @@ async function handleUpdate(update, env) {
 
   // AI chat
   await saveMsg(env, chatId, 'user', text);
+  fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/sendChatAction', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action: 'typing' })
+  }).catch(function(){});
   const history = await getHistory(env, chatId, 20);
   const settings = await env.DB.prepare('SELECT system_prompt, model FROM users WHERE chat_id = ?').bind(chatId).first();
   try {
