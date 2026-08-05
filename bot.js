@@ -118,16 +118,17 @@ async function handleUpdate(update, env) {
     const parts = text.split(' ');
     const cmd = parts[0];
     const prompt = parts.slice(1).join(' ');
-    const modelMap = {'/img1': 'flux-realism', '/img2': 'flux-anime', '/img3': 'flux-3d', '/img4': 'turbo', '/img5': 'sana', '/img6': 'flux-schnell', '/img7': 'flux-pro', '/img8': 'stable-diffusion-xl', '/img9': 'playground-v2.5', '/img10': 'kandinsky-3'};
+    const modelMap = {'/img1': 'flux-realism', '/img2': 'flux-anime', '/img3': 'flux-3d', '/img4': 'turbo', '/img5': 'sana', '/img6': 'flux-schnell', '/img7': 'flux-pro', '/img8': 'flux-cablyai', '/img9': 'flux-2d-v2', '/img10': 'flux-spark'};
     const model = modelMap[cmd];
-    if (!prompt && cmd === '/img') return send(env, chatId, 'Image models:\n/img1 - Flux Realistic\n/img2 - Flux Anime\n/img3 - Flux 3D\n/img4 - Turbo (fast)\n/img5 - Sana\n/img6 - Flux Schnell\n/img7 - Flux Pro\n/img8 - SDXL\n/img9 - Playground 2.5\n/img10 - Kandinsky 3\n\nDefault: /img = Flux');
+    if (!prompt && cmd === '/img') return send(env, chatId, 'Image models:\n/img1 - Flux Realistic (photo-like)\n/img2 - Flux Anime (Japanese style)\n/img3 - Flux 3D (3D render)\n/img4 - Turbo (fast)\n/img5 - Sana (artistic)\n/img6 - Flux Schnell (fast+quality)\n/img7 - Flux Pro (professional)\n/img8 - CablyAI (artistic)\n/img9 - Flux 2D (flat design)\n/img10 - Flux Spark (creative)\n\nDefault: /img = Flux\n\nSizes: append WxH like /img 1920x1080 cat');
     if (!prompt) return send(env, chatId, 'Provide description.');
     await typing(env, chatId);
     try {
       const seed = Math.floor(Math.random() * 999999);
       const modelParam = model ? '&model=' + model : '';
       const label = model ? '[' + model + '] ' : '[flux] ';
-      const imgUrl = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&nologo=true' + modelParam + '&seed=' + seed;
+      const enhance = model === 'flux-realism' ? '&enhance=true' : '';
+      const imgUrl = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&nologo=true' + modelParam + enhance + '&seed=' + seed;
       await sendPhoto(env, chatId, imgUrl, label + prompt);
     } catch (e) {
       await send(env, chatId, 'Image error: ' + e.message);
