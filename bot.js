@@ -194,11 +194,7 @@ async function pickBestModel(text, env) {
   if (lower.match(/\b(explain|why|how|analyze|compare|think|reason|math|calculate|prove|theory)\b/) && text.length > 50) {
     return 'Xk/qwen/qwen3.8-max';
   }
-  // Simple/short queries
-  if (text.length < 30) {
-    return 'Xk/xiaomi/mimo-v2.5:free';
-  }
-  // Default: fast general
+  // Default: Gemini Flash Lite for everything else
   return 'gemini/gemini-3.5-flash-lite';
 }
 
