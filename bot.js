@@ -498,6 +498,9 @@ async function handleUpdate(update, env) {
 
   if (text === '/clear') return sendWithKeyboard(env, chatId, '⚠️ مطمئن هستید؟', confirmClear());
 
+  if (text.startsWith('/enhance')) return handleEnhance(env, chatId, text);
+  if (text.startsWith('/upscale')) return handleUpscale(env, chatId, text);
+
   if (text === '/models') {
     const s = await env.DB.prepare('SELECT model, agent_mode FROM users WHERE chat_id = ?').bind(chatId).first();
     const currentModel = s?.model || DEFAULT_MODEL;
