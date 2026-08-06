@@ -406,7 +406,7 @@ async function handleCallback(cb, env) {
   if (data === 'img_help') return editMessage(env, chatId, msgId, '🖼️ **تولید تصویر**\n\n`/img [توضیحات]`\n\n/img1 تا /img8', imgModelsKeyboard());
   if (data === 'tr_help') return editMessage(env, chatId, msgId, '🌐 **ترجمه**\n\n`/tr [متن]`', mainMenu('https://hermes-bot.r65.workers.dev/webapp'));
   if (data === 'prompt_help') return editMessage(env, chatId, msgId, '📝 **پرامپت**\n\n`/system [پرامپت]`', mainMenu('https://hermes-bot.r65.workers.dev/webapp'));
-  if (data === 'help') return editMessage(env, chatId, msgId, 'ℹ️ **راهنما**\n\n💬 /start | 🔍 /search | 🖼️ /img\n🌐 /tr | 🧹 /clear | ⚙️ /settings', mainMenu('https://hermes-bot.r65.workers.dev/webapp'));
+  if (data === 'help') return editMessage(env, chatId, msgId, 'ℹ️ **راهنما**\n\n💬 /start | 🔍 /search | 🖼️ /img\n🌐 /tr | ✨ /enhance | 🔍 /upscale\n🧹 /clear | ⚙️ /settings', mainMenu('https://hermes-bot.r65.workers.dev/webapp'));
 
   if (data.startsWith('imgm_')) {
     const n = data.replace('imgm_', '');
