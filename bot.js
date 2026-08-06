@@ -458,9 +458,33 @@ async function handleUpdate(update, env) {
     return;
   }
 
-  // Photo handling - vision not available due to quota
+  // Photo handling with Gemini Flash Lite vision
   if (msg.photo) {
-    return send(env, chatId, '📸 عکس دریافت شد!\n\nمتأسفانه قابلیت تحلیل تصویر فعلاً در دسترس نیست.\n\nبرای تولید تصویر از /img استفاده کنید.');
+    await typing(env, chatId);
+    try {
+      const photos = msg.photo.sort((a, b) => b.file_size - a.file_size);
+      const fileId = photos[0].file_id;
+      const fileResp = await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/getFile?file_id=' + fileId);
+      const fileData = await fileResp.json();
+      if (fileData.ok) {
+        const imgUrl = 'https://api.telegram.org/file/bot' + env.TELEGRAM_BOT_TOKEN + '/' + fileData.result.file_path;
+        const visionResp = await fetch(env.OPENAI_BASE_URL + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.OPENAI_API_KEY },
+          body: JSON.stringify({
+            model: 'gemini/gemini-3.5-flash-lite',
+            messages: [{role:'user',content:[{type:'text',text:'Describe this image in detail.'},{type:'image_url',image_url:{url:imgUrl}}]}],
+            max_tokens: 1000, stream: false
+          })
+        });
+        const visionRaw = await visionResp.text();
+        var visionData;
+        try { visionData = JSON.parse(visionRaw); } catch(e) { visionData = {error: visionRaw.substring(0,200)}; }
+        const reply = visionData.choices?.[0]?.message?.content || 'Error: ' + JSON.stringify(visionData.error || 'unknown');
+        return send(env, chatId, reply);
+      }
+    } catch (e) { return send(env, chatId, '❌ خطا: ' + e.message); }
+    return send(env, chatId, '❌ عکس دریافت نشد.');
   }
   const text = msg.text ? msg.text.trim() : '';
   if (!text) return;
