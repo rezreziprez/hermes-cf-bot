@@ -1,5 +1,5 @@
-// Hoosh-style Quiz Bot v3 - Cloudflare Worker
-// Inline game panel + group quiz like @hooshrobot
+// Quiz Bot v4 - Cloudflare Worker
+// Fixed: no answer reveal, edit same message, auto-advance
 
 export default {
   async fetch(request, env) {
@@ -8,17 +8,11 @@ export default {
     if (url.pathname === '/webhook' && request.method === 'POST') {
       try {
         const update = await request.json();
-        if (update.inline_query) {
-          await handleInline(update.inline_query, env);
-        } else if (update.callback_query) {
-          await handleCallback(update.callback_query, env);
-        } else if (update.message) {
-          await handleMessage(update.message, env);
-        }
+        if (update.inline_query) await handleInline(update.inline_query, env);
+        else if (update.callback_query) await handleCallback(update.callback_query, env);
+        else if (update.message) await handleMessage(update.message, env);
         return new Response('OK');
-      } catch (e) {
-        return new Response('Error: ' + e.message, { status: 500 });
-      }
+      } catch (e) { return new Response('Error: ' + e.message, { status: 500 }); }
     }
     return new Response('Quiz Bot Active', { status: 200 });
   },
@@ -32,12 +26,13 @@ async function api(env, method, body) {
   return (await resp.json()).result;
 }
 
-async function send(env, chatId, text, kb) {
-  return api(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...(kb ? { reply_markup: kb } : {}) });
-}
-
 async function editMsg(env, chatId, msgId, text, kb) {
-  try { await api(env, 'editMessageText', { chat_id: chatId, message_id: msgId, text, parse_mode: 'HTML', ...(kb ? { reply_markup: kb } : {}) }); } catch (e) {}
+  try {
+    await api(env, 'editMessageText', {
+      chat_id: chatId, message_id: msgId, text, parse_mode: 'HTML',
+      ...(kb !== undefined ? { reply_markup: kb } : {})
+    });
+  } catch (e) {}
 }
 
 async function answerCb(env, id, text, alert) {
@@ -55,7 +50,7 @@ function getGame(chatId) {
       settings: { category: 'all', rounds: 10, timer: 15 },
       currentQ: null, round: 0,
       answeredBy: new Map(),
-      lobbyMsgId: null, questionMsgId: null,
+      gameMsgId: null,
       timerHandle: null
     });
   }
@@ -72,7 +67,7 @@ const QUESTIONS = {
     { q: '🏛️ کریستف کلمب آمریکا را چه سالی کشف کرد؟', a: ['1488', '1492', '1500', '1510'], c: 1 },
     { q: '🏛️ آخرین شاه ایران که بود؟', a: ['رضاشاه', 'محمدرضا شاه', 'احمدشاه', 'ناصرالدین شاه'], c: 1 },
     { q: '🏛️ امپراتوری عثمانی کجا بود؟', a: ['ایران', 'ترکیه', 'عربستان', 'مصر'], c: 1 },
-    { q: '🏛️ سلسله صفویه کجا بود؟', a: ['تهران', 'اصفهان', 'شیراز', 'تبریز'], c: 1 },
+    { q: '🏛️ سلسله صفویه پایتختش کجا بود؟', a: ['تهران', 'اصفهان', 'شیراز', 'تبریز'], c: 1 },
     { q: '🏛️ ناپلئون اهل کجا بود؟', a: ['ایتالیا', 'فرانسه', 'اسپانیا', 'آلمان'], c: 1 },
     { q: '🏛️ هیتلر اهل کجا بود؟', a: ['آلمان', 'اتریش', 'لهستان', 'مجارستان'], c: 1 },
     { q: '🏛️ جنگ جهانی اول چه سالی تمام شد؟', a: ['1916', '1917', '1918', '1919'], c: 2 },
@@ -130,9 +125,9 @@ const QUESTIONS = {
     { q: '⚽ ورزش ملی ایران؟', a: ['فوتبال', 'کشتی', 'والیبال', 'بسکتبال'], c: 1 },
     { q: '⚽ المپیک 2028 کجاست؟', a: ['پاریس', 'لس‌آنجلس', 'بریزبن', 'رم'], c: 1 },
     { q: '⚽ بولینگ: چند پین دارد؟', a: ['8', '10', '12', '15'], c: 1 },
-    { q: '⚽ ورزشکار معروف ایرانی در کشتی؟', a: ['رسول خادم', 'حسن یزدانی', 'قادریان', 'امیررضا'], c: 1 },
     { q: '⚽ NBA مخفف چیست؟', a: ['National Basketball Assoc.', 'New Basketball Arena', 'National Ball Assoc.', 'None'], c: 0 },
-    { q: '⚽ جام جهانی 2026 کجاست؟', a: ['آمریکا و کانادا و مکزیک', 'آرژانتین', 'اسپانیا', 'عربستان'], c: 0 },
+    { q: '⚽ جام جهانی 2026 کجاست؟', a: ['آمریکا/کانادا/مکزیک', 'آرژانتین', 'اسپانیا', 'عربستان'], c: 0 },
+    { q: '⚽ ورزشکار معروف ایرانی در کشتی؟', a: ['رسول خادم', 'حسن یزدانی', 'قادریان', 'امیررضا'], c: 1 },
   ],
   movies: [
     { q: '🎬 کارگردان تایتانیک؟', a: ['اسپیلبرگ', 'جیمز کامرون', 'نولان', 'اسکورسیزی'], c: 1 },
@@ -145,8 +140,8 @@ const QUESTIONS = {
     { q: '🎬 کارگردان "فروشنده"؟', a: ['کیارستمی', 'فرهادی', 'مجیدی', 'مخملباف'], c: 1 },
     { q: '🎬 Avatar کی ساخته شد؟', a: ['2007', '2009', '2011', '2013'], c: 1 },
     { q: '🎬 Breaking Bad درباره چیست؟', a: ['وکیل', 'معلم شیمی', 'دکتر', 'پلیس'], c: 1 },
-    { q: '🎬 جایزه اسکار مخفف چیست؟', a: ['آکادمی', 'Organization Award', 'Oscar', 'None'], c: 0 },
-    { q: '🎬 سریال "Game of Thrones" چند فصل دارد؟', a: ['6', '7', '8', '9'], c: 2 },
+    { q: '🎬 Game of Thrones چند فصل دارد؟', a: ['6', '7', '8', '9'], c: 2 },
+    { q: '🎬 سریال "Friends" کجا ساخته شد؟', a: ['انگلیس', 'آمریکا', 'کانادا', 'استرالیا'], c: 1 },
   ],
   music: [
     { q: '🎵 "ملکه پاپ" کیست؟', a: ['بیانسه', 'مدونا', 'لیدی گاگا', 'ریانا'], c: 1 },
@@ -156,11 +151,11 @@ const QUESTIONS = {
     { q: '🎵 "پادشاه راک اند رول" کیست؟', a: ['الویس پرسلی', 'چاک بری', 'لیتل ریچارد', 'بادی هالی'], c: 0 },
     { q: '🎵 پیانو چند کلید سفید دارد؟', a: ['36', '42', '52', '62'], c: 2 },
     { q: '🎵 ساز ملی ایران؟', a: ['تار', 'سنتور', 'سه‌تار', 'کمانچه'], c: 0 },
-    { q: '🎵 خواننده معروف ایرانی پاپ؟', a: ['گوگوش', 'ابی', 'درویش', 'شجریان'], c: 0 },
     { q: '🎵 ساز "دف" مال کجاست؟', a: ['کردستان', 'آذربایجان', 'خوزستان', 'گیلان'], c: 0 },
     { q: '🎵 سرود ملی ایران چند بیت دارد؟', a: ['2', '3', '4', '5'], c: 2 },
     { q: '🎵 موسیقی راک از کجا آمد؟', a: ['آمریکا', 'انگلیس', 'ایرلند', 'آلمان'], c: 0 },
     { q: '🎵 خواننده "بیا بریم کوه"؟', a: ['محسن چاوشی', 'رضا صادقی', 'محمد علیزاده', 'فرزاد فرزین'], c: 1 },
+    { q: '🎵 خواننده معروف ایرانی پاپ؟', a: ['گوگوش', 'ابی', 'درویش', 'شجریان'], c: 0 },
   ],
   literature: [
     { q: '📖 شاهنامه را کی نوشت؟', a: ['مولوی', 'فردوسی', 'حافظ', 'سعدی'], c: 1 },
@@ -187,7 +182,7 @@ const QUESTIONS = {
     { q: '💻 ChatGPT از کیست؟', a: ['گوگل', 'OpenAI', 'مایکروسافت', 'متا'], c: 1 },
     { q: '💻 اولین کامپیوتر جهان؟', a: ['UNIVAC', 'ENIAC', 'IBM', 'Apple'], c: 1 },
     { q: '💻 مالک اینستاگرام؟', a: ['توییتر', 'گوگل', 'متا', 'اپل'], c: 2 },
-    { q: '💻 HTML مخفف چیست؟', a: ['HyperText Markup Language', 'High Tech Modern Language', 'Home Tool Markup', 'None'], c: 0 },
+    { q: '💻 HTML مخفف چیست؟', a: ['HyperText Markup Language', 'High Tech Modern', 'Home Tool Markup', 'None'], c: 0 },
     { q: '💻 پایتون از کی ساخته شد؟', a: ['لینوس توروالدز', 'گویدو', 'جیمز گاسلینگ', 'بندن آیک'], c: 1 },
   ],
 };
@@ -202,81 +197,50 @@ function randQ(cat) {
   const cats = cat === 'all' ? Object.keys(QUESTIONS) : [cat];
   const c = cats[Math.floor(Math.random() * cats.length)];
   const qs = QUESTIONS[c];
-  const q = qs[Math.floor(Math.random() * qs.length)];
-  return { ...q, category: c };
+  return { ...qs[Math.floor(Math.random() * qs.length)], category: c };
 }
 
 // ========== INLINE HANDLER ==========
 async function handleInline(iq, env) {
-  const query = iq.query.trim();
-  const userId = iq.from.id;
   const name = iq.from.first_name || 'بازیکن';
-
-  // Show game modes as inline results
   const results = [
-    {
-      type: 'article', id: 'quiz_all', title: '🎯 کوئیز - همه ژانرها',
-      description: 'بازی کوئیز با سوالات از همه ژانرها',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: همه\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_all_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_history', title: '🏛️ کوئیز - تاریخ',
-      description: 'بازی کوئیز با سوالات تاریخی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 🏛️ تاریخ\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_history_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_science', title: '🔬 کوئیز - علوم',
-      description: 'بازی کوئیز با سوالات علمی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 🔬 علوم\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_science_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_geography', title: '🌍 کوئیز - جغرافیا',
-      description: 'بازی کوئیز با سوالات جغرافیایی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 🌍 جغرافیا\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_geography_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_food', title: '🍕 کوئیز - غذا',
-      description: 'بازی کوئیز با سوالات غذایی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 🍕 غذا\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_food_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_sports', title: '⚽ کوئیز - ورزش',
-      description: 'بازی کوئیز با سوالات ورزشی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: ⚽ ورزش\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_sports_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_movies', title: '🎬 کوئیز - فیلم',
-      description: 'بازی کوئیز با سوالات سینمایی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 🎬 فیلم\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_movies_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_music', title: '🎵 کوئیز - موسیقی',
-      description: 'بازی کوئیز با سوالات موسیقی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 🎵 موسیقی\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_music_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_lit', title: '📖 کوئیز - ادبیات',
-      description: 'بازی کوئیز با سوالات ادبی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 📖 ادبیات\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_literature_10_15', style: 'success' }]] }
-    },
-    {
-      type: 'article', id: 'quiz_tech', title: '💻 کوئیز - تکنولوژی',
-      description: 'بازی کوئیز با سوالات تکنولوژی',
-      input_message_content: { message_text: '🎮 <b>بازی کوئیز شروع شد!</b>\n\n📦 ژانر: 💻 تکنولوژی\n🎯 10 سوال | ⏰ 15 ثانیه\n\n👤 سازنده: <b>' + name + '</b>\n\n🎮 <b>پایه‌ام رو بزن!</b>', parse_mode: 'HTML' },
-      reply_markup: { inline_keyboard: [[{ text: '🎮 پایه‌ام!', callback_data: 'j_technology_10_15', style: 'success' }]] }
-    },
+    makeInline('quiz_all', '🎯 همه ژانرها', 'کوئیز با سوالات از همه ژانرها', name, 'all'),
+    makeInline('quiz_history', '🏛️ تاریخ', 'کوئیز تاریخی', name, 'history'),
+    makeInline('quiz_science', '🔬 علوم', 'کوئیز علمی', name, 'science'),
+    makeInline('quiz_geography', '🌍 جغرافیا', 'کوئیز جغرافیا', name, 'geography'),
+    makeInline('quiz_food', '🍕 غذا', 'کوئیز غذا', name, 'food'),
+    makeInline('quiz_sports', '⚽ ورزش', 'کوئیز ورزشی', name, 'sports'),
+    makeInline('quiz_movies', '🎬 فیلم', 'کوئیز سینما', name, 'movies'),
+    makeInline('quiz_music', '🎵 موسیقی', 'کوئیز موسیقی', name, 'music'),
+    makeInline('quiz_lit', '📖 ادبیات', 'کوئیز ادبی', name, 'literature'),
+    makeInline('quiz_tech', '💻 تکنولوژی', 'کوئیز تکنولوژی', name, 'technology'),
   ];
-
   await api(env, 'answerInlineQuery', { inline_query_id: iq.id, results, cache_time: 0, is_personal: true });
+}
+
+function makeInline(id, title, desc, name, cat) {
+  return {
+    type: 'article', id, title, description: desc,
+    input_message_content: {
+      message_text:
+        '━━━━━━━━━━━━━━━━━━━\n' +
+        '🎮 <b>بازی کوئیز!</b>\n' +
+        '━━━━━━━━━━━━━━━━━━━\n\n' +
+        '📦 ژانر: <b>' + (cat === 'all' ? 'همه' : CAT_NAMES[cat]) + '</b>\n' +
+        '📊 10 سوال | ⏰ 15 ثانیه\n\n' +
+        '👤 سازنده: <b>' + name + '</b>\n\n' +
+        '━━━━━━━━━━━━━━━━━━━\n\n' +
+        '🎮 <b>پایه‌ام رو بزن!</b>',
+      parse_mode: 'HTML'
+    },
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🎮 پایه‌ام! (1 نفر)', callback_data: 'j_' + cat + '_10_15', style: 'success' }],
+        [{ text: '🚀 شروع بازی!', callback_data: 'go', style: 'primary' }],
+        [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
+      ]
+    }
+  };
 }
 
 // ========== MESSAGE HANDLER ==========
@@ -287,54 +251,43 @@ async function handleMessage(msg, env) {
   const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
 
   if (text === '/start' || text.startsWith('/start@')) {
-    if (isGroup) {
-      await send(env, chatId,
-        '━━━━━━━━━━━━━━━━━━━\n🎮 <b>چالش اطلاعات</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-        '🎯 بازی کوئیز چند نفره!\n👥 با دوستات بازی کن\n🏆 هر کی بیشتر جواب بده برنده‌ست!\n\n' +
-        '━━━━━━━━━━━━━━━━━━━\n\n' +
+    const txt = isGroup
+      ? '━━━━━━━━━━━━━━━━━━━\n🎮 <b>چالش اطلاعات</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
         '📌 <b>نحوه بازی:</b>\n' +
-        '۱. تو هر گپی بنویس: <code>@Gamebotsbssksbot</code>\n' +
-        '۲. ژانر بازی رو انتخاب کن\n' +
-        '۳. پایه‌ام بزنن و شروع کن!\n\n' +
+        '۱. تو گپ بنویس: <code>@Gamebotsbssksbot</code>\n' +
+        '۲. ژانر رو انتخاب کن\n' +
+        '۳. بقیه پایه‌ام بزنن\n' +
+        '۴. شروع!\n\n' +
+        '🎯 سوالات از 10 ژانر\n👥 چند نفره\n🏆 لیدربورد\n🔴 گزارش سوال\n\n' +
         '━━━━━━━━━━━━━━━━━━━\n\n' +
-        'دستورات:\n' +
-        '/quiz — ساخت بازی با تنظیمات\n' +
-        '/score — امتیازات\n' +
-        '/help — راهنما\n\n' +
-        '━━━━━━━━━━━━━━━━━━━'
-      );
-    } else {
-      await send(env, chatId,
-        '━━━━━━━━━━━━━━━━━━━\n🎮 <b>چالش اطلاعات</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-        'من رو به یه گروه اد کن و با دوستات بازی کن!\n\n' +
-        '📌 <b>نحوه بازی:</b>\n' +
+        '/quiz — ساخت بازی با تنظیمات\n/score — امتیازات\n/help — راهنما'
+      : '━━━━━━━━━━━━━━━━━━━\n🎮 <b>چالش اطلاعات</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
+        'من رو به گروه اد کن و با دوستات بازی کن!\n\n' +
+        '📌 نحوه بازی:\n' +
         '۱. من رو به گروه اد کن\n' +
         '۲. تو گپ بنویس: <code>@Gamebotsbssksbot</code>\n' +
         '۳. ژانر رو انتخاب کن\n' +
         '۴. بقیه پایه‌ام بزنن\n' +
         '۵. شروع!\n\n' +
-        '🎯 سوالات از 10 ژانر\n👥 چند نفره\n🏆 لیدربورد\n🔴 گزارش سوال اشتباه\n\n' +
-        '━━━━━━━━━━━━━━━━━━━'
-      );
-    }
+        '━━━━━━━━━━━━━━━━━━━';
+    await api(env, 'sendMessage', { chat_id: chatId, text: txt, parse_mode: 'HTML' });
     return;
   }
 
   if (text === '/quiz' || text.startsWith('/quiz@')) {
-    if (!isGroup) { await send(env, chatId, '⚠️ فقط تو گروه میتونی بازی کنی!'); return; }
+    if (!isGroup) { await api(env, 'sendMessage', { chat_id: chatId, text: '⚠️ فقط تو گروه!', parse_mode: 'HTML' }); return; }
     const game = getGame(chatId);
-    if (game.state === 'playing') { await send(env, chatId, '⚠️ بازی در حال اجراست!'); return; }
+    if (game.state === 'playing') { await api(env, 'sendMessage', { chat_id: chatId, text: '⚠️ بازی در حال اجراست!', parse_mode: 'HTML' }); return; }
 
     game.state = 'setup';
     game.host = msg.from.id;
     game.hostName = name;
-    game.players = new Map();
 
-    await send(env, chatId,
-      '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '👤 سازنده: <b>' + name + '</b>\n\n' +
-      '📦 ژانر سوالات رو انتخاب کن:',
-      { inline_keyboard: [
+    const m = await api(env, 'sendMessage', {
+      chat_id: chatId,
+      text: '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی</b>\n━━━━━━━━━━━━━━━━━━━\n\n👤 سازنده: <b>' + name + '</b>\n\n📦 ژانر سوالات رو انتخاب کن:',
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [
         [{ text: '🏛️ تاریخ', callback_data: 's_cat_history' }, { text: '🌍 جغرافیا', callback_data: 's_cat_geography' }],
         [{ text: '🔬 علوم', callback_data: 's_cat_science' }, { text: '🍕 غذا', callback_data: 's_cat_food' }],
         [{ text: '⚽ ورزش', callback_data: 's_cat_sports' }, { text: '🎬 فیلم', callback_data: 's_cat_movies' }],
@@ -342,37 +295,23 @@ async function handleMessage(msg, env) {
         [{ text: '💻 تکنولوژی', callback_data: 's_cat_technology' }],
         [{ text: '🎯 همه ژانرها', callback_data: 's_cat_all', style: 'primary' }]
       ]}
-    );
+    });
+    game.gameMsgId = m?.message_id;
     return;
   }
 
   if (text === '/score' || text.startsWith('/score@')) {
     const game = getGame(chatId);
-    if (!game.players.size) { await send(env, chatId, '📊 هنوز کسی بازی نکرده!'); return; }
+    if (!game.players.size) { await api(env, 'sendMessage', { chat_id: chatId, text: '📊 هنوز کسی بازی نکرده!', parse_mode: 'HTML' }); return; }
     await sendScoreboard(env, chatId, game);
     return;
   }
 
   if (text === '/help' || text.startsWith('/help@')) {
-    await send(env, chatId,
-      '🎮 <b>راهنمای چالش اطلاعات</b>\n\n' +
-      '📌 <b>نحوه بازی:</b>\n' +
-      '۱. من رو به گروه اد کن\n' +
-      '۲. تو گپ بنویس: <code>@Gamebotsbssksbot</code>\n' +
-      '۳. ژانر رو انتخاب کن\n' +
-      '۴. بقیه پایه‌ام بزنن\n' +
-      '۵. شروع!\n\n' +
-      '🎯 <b>امتیازدهی:</b>\n' +
-      '• جواب درست: 5 + امتیاز زمان + امتیاز استریک\n' +
-      '• جواب سریع‌تر = امتیاز بیشتر\n' +
-      '• جواب‌های درست پشت سر هم = استریک\n\n' +
-      '🔴 <b>گزارش:</b>\n' +
-      'اگه سوال اشتباه دیدی، دکمه گزارش رو بزن\n\n' +
-      'دستورات:\n' +
-      '/quiz — ساخت بازی با تنظیمات\n' +
-      '/score — امتیازات\n' +
-      '/help — راهنما'
-    );
+    await api(env, 'sendMessage', {
+      chat_id: chatId, parse_mode: 'HTML',
+      text: '🎮 <b>راهنمای چالش اطلاعات</b>\n\n📌 نحوه بازی:\n۱. تو گپ بنویس: <code>@Gamebotsbssksbot</code>\n۲. ژانر رو انتخاب کن\n۳. بقیه پایه‌ام بزنن\n۴. شروع!\n\n🎯 امتیازدهی:\n• جواب درست: 5 + امتیاز زمان + استریک\n• سریع‌تر = بیشتر\n\n🔴 سوال اشتباه؟ دکمه گزارش رو بزن\n\n/quiz — ساخت بازی\n/score — امتیازات'
+    });
     return;
   }
 }
@@ -386,14 +325,13 @@ async function handleCallback(cb, env) {
   const msgId = cb.message.message_id;
   const game = getGame(chatId);
 
-  // ========== INLINE JOIN (from inline query) ==========
+  // ===== INLINE JOIN =====
   if (data.startsWith('j_')) {
+    if (game.state === 'playing') { await answerCb(env, cb.id, '⚠️ بازی در حال اجراست!', true); return; }
     const parts = data.split('_');
     const cat = parts[1];
     const rounds = parseInt(parts[2]) || 10;
     const timer = parseInt(parts[3]) || 15;
-
-    if (game.state === 'playing') { await answerCb(env, cb.id, '⚠️ بازی در حال اجراست!', true); return; }
 
     game.state = 'waiting';
     game.host = userId;
@@ -401,38 +339,23 @@ async function handleCallback(cb, env) {
     game.settings = { category: cat, rounds, timer };
     game.players = new Map();
     game.players.set(userId, { name, score: 0, correct: 0, wrong: 0, streak: 0, bestStreak: 0 });
-    game.lobbyMsgId = msgId;
+    game.gameMsgId = msgId;
 
     const catName = cat === 'all' ? 'همه' : (CAT_NAMES[cat] || cat);
     await editMsg(env, chatId, msgId,
-      '━━━━━━━━━━━━━━━━━━━\n🎮 <b>بازی کوئیز!</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '📦 ژانر: <b>' + catName + '</b>\n' +
-      '📊 تعداد سوال: <b>' + rounds + '</b>\n' +
-      '⏰ تایمر: <b>' + timer + ' ثانیه</b>\n\n' +
-      '━━━━━━━━━━━━━━━━━━━\n' +
-      '👥 <b>بازیکنان (1 نفر):</b>\n' +
-      '  👤 ' + name + '\n' +
-      '━━━━━━━━━━━━━━━━━━━\n\n' +
-      '🎮 <b>پایه‌ام رو بزن تا وارد بازی بشی!</b>',
-      { inline_keyboard: [
-        [{ text: '🎮 پایه‌ام! (1 نفر)', callback_data: 'join', style: 'success' }],
-        [{ text: '🚀 شروع بازی!', callback_data: 'go', style: 'primary' }],
-        [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
-      ]}
+      lobbyText(catName, rounds, timer, game.players),
+      lobbyKb(game.players)
     );
-    await answerCb(env, cb.id, '✅ بازی ساخته شد! پایه‌ام رو بزنید!');
+    await answerCb(env, cb.id, '✅ ' + name + ' وارد بازی شد!');
     return;
   }
 
-  // ========== SETUP FLOW (from /quiz) ==========
+  // ===== SETUP: Category =====
   if (data.startsWith('s_cat_')) {
-    const cat = data.replace('s_cat_', '');
-    game.settings.category = cat;
-    const catName = cat === 'all' ? 'همه' : (CAT_NAMES[cat] || cat);
+    game.settings.category = data.replace('s_cat_', '');
+    const cn = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
     await editMsg(env, chatId, msgId,
-      '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '📦 ژانر: <b>' + catName + '</b>\n\n' +
-      '📊 تعداد سوال رو انتخاب کن:',
+      '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی</b>\n━━━━━━━━━━━━━━━━━━━\n\n📦 ژانر: <b>' + cn + '</b>\n\n📊 تعداد سوال:',
       { inline_keyboard: [
         [{ text: '5 ⚡', callback_data: 's_rnd_5' }, { text: '10 🎯', callback_data: 's_rnd_10' }],
         [{ text: '15 🔥', callback_data: 's_rnd_15' }, { text: '20 💎', callback_data: 's_rnd_20' }]
@@ -442,83 +365,55 @@ async function handleCallback(cb, env) {
     return;
   }
 
+  // ===== SETUP: Rounds =====
   if (data.startsWith('s_rnd_')) {
     game.settings.rounds = parseInt(data.replace('s_rnd_', ''));
-    const catName = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
+    const cn = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
     await editMsg(env, chatId, msgId,
-      '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '📦 ژانر: <b>' + catName + '</b>\n' +
-      '📊 تعداد سوال: <b>' + game.settings.rounds + '</b>\n\n' +
-      '⏰ تایمر هر سوال رو انتخاب کن:',
+      '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی</b>\n━━━━━━━━━━━━━━━━━━━\n\n📦 ژانر: <b>' + cn + '</b>\n📊 سوال: <b>' + game.settings.rounds + '</b>\n\n⏰ تایمر:',
       { inline_keyboard: [
-        [{ text: '10 ثانیه ⚡', callback_data: 's_tmr_10' }, { text: '15 ثانیه 🎯', callback_data: 's_tmr_15' }],
-        [{ text: '20 ثانیه 🔥', callback_data: 's_tmr_20' }, { text: '30 ثانیه 💎', callback_data: 's_tmr_30' }]
+        [{ text: '10s ⚡', callback_data: 's_tmr_10' }, { text: '15s 🎯', callback_data: 's_tmr_15' }],
+        [{ text: '20s 🔥', callback_data: 's_tmr_20' }, { text: '30s 💎', callback_data: 's_tmr_30' }]
       ]}
     );
     await answerCb(env, cb.id);
     return;
   }
 
+  // ===== SETUP: Timer → Lobby =====
   if (data.startsWith('s_tmr_')) {
     game.settings.timer = parseInt(data.replace('s_tmr_', ''));
-    const catName = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
     game.state = 'waiting';
     game.players = new Map();
     game.players.set(userId, { name, score: 0, correct: 0, wrong: 0, streak: 0, bestStreak: 0 });
-    game.lobbyMsgId = msgId;
+    game.gameMsgId = msgId;
 
+    const cn = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
     await editMsg(env, chatId, msgId,
-      '━━━━━━━━━━━━━━━━━━━\n🎮 <b>بازی کوئیز!</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '📦 ژانر: <b>' + catName + '</b>\n' +
-      '📊 تعداد سوال: <b>' + game.settings.rounds + '</b>\n' +
-      '⏰ تایمر: <b>' + game.settings.timer + ' ثانیه</b>\n\n' +
-      '━━━━━━━━━━━━━━━━━━━\n' +
-      '👥 <b>بازیکنان (1 نفر):</b>\n' +
-      '  👤 ' + name + '\n' +
-      '━━━━━━━━━━━━━━━━━━━\n\n' +
-      '🎮 <b>پایه‌ام رو بزن تا وارد بازی بشی!</b>',
-      { inline_keyboard: [
-        [{ text: '🎮 پایه‌ام! (1 نفر)', callback_data: 'join', style: 'success' }],
-        [{ text: '🚀 شروع بازی!', callback_data: 'go', style: 'primary' }],
-        [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
-      ]}
+      lobbyText(cn, game.settings.rounds, game.settings.timer, game.players),
+      lobbyKb(game.players)
     );
     await answerCb(env, cb.id, '✅ تنظیمات ذخیره شد!');
     return;
   }
 
-  // ========== JOIN ==========
+  // ===== JOIN =====
   if (data === 'join') {
     if (game.state !== 'waiting') { await answerCb(env, cb.id, 'بازی در انتظار نیست!'); return; }
     if (game.players.has(userId)) { await answerCb(env, cb.id, 'قبلاً پایه زدی!'); return; }
 
     game.players.set(userId, { name, score: 0, correct: 0, wrong: 0, streak: 0, bestStreak: 0 });
 
-    let list = '';
-    game.players.forEach(p => { list += '  👤 ' + p.name + '\n'; });
-    const catName = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
-
-    await editMsg(env, chatId, game.lobbyMsgId,
-      '━━━━━━━━━━━━━━━━━━━\n🎮 <b>بازی کوئیز!</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '📦 ژانر: <b>' + catName + '</b>\n' +
-      '📊 تعداد سوال: <b>' + game.settings.rounds + '</b>\n' +
-      '⏰ تایمر: <b>' + game.settings.timer + ' ثانیه</b>\n\n' +
-      '━━━━━━━━━━━━━━━━━━━\n' +
-      '👥 <b>بازیکنان (' + game.players.size + ' نفر):</b>\n' +
-      list +
-      '━━━━━━━━━━━━━━━━━━━\n\n' +
-      '🎮 <b>پایه‌ام رو بزن!</b>',
-      { inline_keyboard: [
-        [{ text: '🎮 پایه‌ام! (' + game.players.size + ' نفر)', callback_data: 'join', style: 'success' }],
-        [{ text: '🚀 شروع بازی!', callback_data: 'go', style: 'primary' }],
-        [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
-      ]}
+    const cn = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
+    await editMsg(env, chatId, game.gameMsgId,
+      lobbyText(cn, game.settings.rounds, game.settings.timer, game.players),
+      lobbyKb(game.players)
     );
     await answerCb(env, cb.id, '✅ ' + name + ' اضافه شد!');
     return;
   }
 
-  // ========== CANCEL ==========
+  // ===== CANCEL =====
   if (data === 'cancel') {
     if (userId !== game.host) { await answerCb(env, cb.id, 'فقط سازنده!', true); return; }
     if (game.timerHandle) clearTimeout(game.timerHandle);
@@ -529,36 +424,27 @@ async function handleCallback(cb, env) {
     return;
   }
 
-  // ========== START ==========
+  // ===== START =====
   if (data === 'go') {
-    if (userId !== game.host) { await answerCb(env, cb.id, 'فقط سازنده میتونه شروع کنه!', true); return; }
-    if (game.players.size < 2) { await answerCb(env, cb.id, 'حداقل 2 نفر لازمه!', true); return; }
+    if (userId !== game.host) { await answerCb(env, cb.id, 'فقط سازنده!', true); return; }
+    if (game.players.size < 2) { await answerCb(env, cb.id, 'حداقل 2 نفر!', true); return; }
 
     game.state = 'playing';
     game.round = 0;
-
-    const catName = game.settings.category === 'all' ? 'همه' : (CAT_NAMES[game.settings.category] || game.settings.category);
-    await editMsg(env, chatId, game.lobbyMsgId,
-      '━━━━━━━━━━━━━━━━━━━\n🚀 <b>بازی شروع شد!</b>\n━━━━━━━━━━━━━━━━━━━\n\n' +
-      '👥 ' + game.players.size + ' بازیکن\n' +
-      '📊 ' + game.settings.rounds + ' سوال\n' +
-      '⏰ ' + game.settings.timer + ' ثانیه هر سوال\n\n' +
-      '⏳ سوال اول...',
-      null
-    );
-
     await sendQuestion(env, chatId, game);
     await answerCb(env, cb.id, '🚀 شروع!');
     return;
   }
 
-  // ========== ANSWER ==========
+  // ===== ANSWER =====
   if (data.startsWith('a_')) {
     if (game.state !== 'playing' || !game.currentQ) { await answerCb(env, cb.id, 'بازی فعال نیست!'); return; }
 
     const parts = data.split('_');
+    const qId = parts[1];
     const chosen = parseInt(parts[2]);
 
+    if (qId !== game.currentQ.id) { await answerCb(env, cb.id, 'سوال قبلیه!'); return; }
     if (game.answeredBy.has(userId)) { await answerCb(env, cb.id, 'قبلاً جواب دادی!', true); return; }
 
     if (!game.players.has(userId)) {
@@ -577,35 +463,77 @@ async function handleCallback(cb, env) {
       player.correct++;
       player.streak++;
       player.bestStreak = Math.max(player.bestStreak, player.streak);
-      await answerCb(env, cb.id, '✅ درست! +' + points + ' (' + timeSec + 's)');
+      await answerCb(env, cb.id, '✅ درست! +' + points + ' امتیاز (' + timeSec + 's)');
     } else {
       player.wrong++;
       player.streak = 0;
       await answerCb(env, cb.id, '❌ اشتباه!');
     }
 
+    // AUTO-ADVANCE: if all players answered, go to next question immediately
     if (game.answeredBy.size >= game.players.size) {
       if (game.timerHandle) clearTimeout(game.timerHandle);
       game.round++;
-      await showAnswer(env, chatId, game);
       if (game.round >= game.settings.rounds) {
         game.state = 'finished';
-        setTimeout(() => sendFinal(env, chatId, game), 3000);
+        await sendFinal(env, chatId, game);
       } else {
-        setTimeout(() => sendQuestion(env, chatId, game), 3000);
+        await sendQuestion(env, chatId, game);
       }
     }
     return;
   }
 
-  // ========== REPORT ==========
+  // ===== REPORT =====
   if (data.startsWith('report_')) {
     await answerCb(env, cb.id, '🔴 گزارش ثبت شد. ممنون!', true);
+    return;
+  }
+
+  // ===== NEW GAME (from final) =====
+  if (data === 'new_game') {
+    game.state = 'idle';
+    game.players = new Map();
+    await editMsg(env, chatId, msgId,
+      '━━━━━━━━━━━━━━━━━━━\n⚙️ <b>تنظیمات بازی جدید</b>\n━━━━━━━━━━━━━━━━━━━\n\n👤 سازنده: <b>' + name + '</b>\n\n📦 ژانر:',
+      { inline_keyboard: [
+        [{ text: '🏛️ تاریخ', callback_data: 's_cat_history' }, { text: '🌍 جغرافیا', callback_data: 's_cat_geography' }],
+        [{ text: '🔬 علوم', callback_data: 's_cat_science' }, { text: '🍕 غذا', callback_data: 's_cat_food' }],
+        [{ text: '⚽ ورزش', callback_data: 's_cat_sports' }, { text: '🎬 فیلم', callback_data: 's_cat_movies' }],
+        [{ text: '🎵 موسیقی', callback_data: 's_cat_music' }, { text: '📖 ادبیات', callback_data: 's_cat_literature' }],
+        [{ text: '💻 تکنولوژی', callback_data: 's_cat_technology' }],
+        [{ text: '🎯 همه ژانرها', callback_data: 's_cat_all', style: 'primary' }]
+      ]}
+    );
+    await answerCb(env, cb.id);
     return;
   }
 }
 
 // ========== GAME FUNCTIONS ==========
+
+function lobbyText(catName, rounds, timer, players) {
+  let list = '';
+  players.forEach(p => { list += '  👤 ' + p.name + '\n'; });
+  return '━━━━━━━━━━━━━━━━━━━\n' +
+    '🎮 <b>بازی کوئیز!</b>\n' +
+    '━━━━━━━━━━━━━━━━━━━\n\n' +
+    '📦 ژانر: <b>' + catName + '</b>\n' +
+    '📊 سوال: <b>' + rounds + '</b> | ⏰ تایمر: <b>' + timer + 's</b>\n\n' +
+    '━━━━━━━━━━━━━━━━━━━\n' +
+    '👥 <b>بازیکنان (' + players.size + ' نفر):</b>\n' + list +
+    '━━━━━━━━━━━━━━━━━━━\n\n' +
+    '🎮 <b>پایه‌ام رو بزن!</b>';
+}
+
+function lobbyKb(players) {
+  return { inline_keyboard: [
+    [{ text: '🎮 پایه‌ام! (' + players.size + ' نفر)', callback_data: 'join', style: 'success' }],
+    [{ text: '🚀 شروع بازی!', callback_data: 'go', style: 'primary' }],
+    [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
+  ]};
+}
+
 async function sendQuestion(env, chatId, game) {
   const q = randQ(game.settings.category);
   const qId = Math.random().toString(36).substring(2, 8);
@@ -614,11 +542,12 @@ async function sendQuestion(env, chatId, game) {
 
   const e = ['🇦', '🇧', '🇨', '🇩'];
   const catName = CAT_NAMES[q.category] || q.category;
+  const answered = game.answeredBy.size + '/' + game.players.size;
 
-  const msg = await send(env, chatId,
+  await editMsg(env, chatId, game.gameMsgId,
     '━━━━━━━━━━━━━━━━━━━\n' +
     '🎯 <b>سوال ' + (game.round + 1) + '/' + game.settings.rounds + '</b>\n' +
-    '📦 ' + catName + ' | ⏰ ' + game.settings.timer + ' ثانیه\n' +
+    '📦 ' + catName + ' | ⏰ ' + game.settings.timer + 's | 👥 ' + answered + '\n' +
     '━━━━━━━━━━━━━━━━━━━\n\n' +
     q.q + '\n\n' +
     e[0] + ' ' + q.a[0] + '\n' +
@@ -627,44 +556,24 @@ async function sendQuestion(env, chatId, game) {
     e[3] + ' ' + q.a[3] + '\n\n' +
     '━━━━━━━━━━━━━━━━━━━',
     { inline_keyboard: [
-      [{ text: e[0] + ' ' + q.a[0], callback_data: 'a_' + qId + '_0', style: 'primary' }, { text: e[1] + ' ' + q.a[1], callback_data: 'a_' + qId + '_1', style: 'primary' }],
-      [{ text: e[2] + ' ' + q.a[2], callback_data: 'a_' + qId + '_2', style: 'primary' }, { text: e[3] + ' ' + q.a[3], callback_data: 'a_' + qId + '_3', style: 'primary' }]
+      [{ text: e[0] + ' ' + q.a[0], callback_data: 'a_' + qId + '_0', style: 'primary' },
+       { text: e[1] + ' ' + q.a[1], callback_data: 'a_' + qId + '_1', style: 'primary' }],
+      [{ text: e[2] + ' ' + q.a[2], callback_data: 'a_' + qId + '_2', style: 'primary' },
+       { text: e[3] + ' ' + q.a[3], callback_data: 'a_' + qId + '_3', style: 'primary' }]
     ]}
   );
 
+  // Timer fallback — if not all answered within time
   game.timerHandle = setTimeout(async () => {
     if (game.state !== 'playing') return;
     game.round++;
-    await showAnswer(env, chatId, game);
     if (game.round >= game.settings.rounds) {
       game.state = 'finished';
-      setTimeout(() => sendFinal(env, chatId, game), 3000);
+      await sendFinal(env, chatId, game);
     } else {
-      setTimeout(() => sendQuestion(env, chatId, game), 3000);
+      await sendQuestion(env, chatId, game);
     }
   }, game.settings.timer * 1000);
-}
-
-async function showAnswer(env, chatId, game) {
-  if (!game.currentQ) return;
-  const e = ['🇦', '🇧', '🇨', '🇩'];
-  let summary = '';
-  game.answeredBy.forEach((ans, uid) => {
-    const p = game.players.get(uid);
-    if (p) summary += (ans.correct ? '✅' : '❌') + ' ' + p.name + ': ' + e[ans.answer] + ' (' + ans.time + 's)\n';
-  });
-  game.players.forEach((p, uid) => {
-    if (!game.answeredBy.has(uid)) summary += '⏰ ' + p.name + ': جواب نداد\n';
-  });
-
-  await send(env, chatId,
-    '━━━━━━━━━━━━━━━━━━━\n' +
-    '✅ <b>جواب درست: ' + e[game.currentQ.c] + ' ' + game.currentQ.a[game.currentQ.c] + '</b>\n' +
-    '━━━━━━━━━━━━━━━━━━━\n\n' +
-    summary + '\n' +
-    '━━━━━━━━━━━━━━━━━━━',
-    { inline_keyboard: [[{ text: '🔴 گزارش سوال اشتباه', callback_data: 'report_' + game.currentQ.id, style: 'danger' }]] }
-  );
 }
 
 async function sendScoreboard(env, chatId, game) {
@@ -676,7 +585,7 @@ async function sendScoreboard(env, chatId, game) {
     text += '    🏆 ' + p.score + ' | ✅ ' + p.correct + ' | ❌ ' + p.wrong + ' | 🔥 ' + p.bestStreak + '\n\n';
   });
   text += '━━━━━━━━━━━━━━━━━━━';
-  await send(env, chatId, text);
+  await api(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
 }
 
 async function sendFinal(env, chatId, game) {
@@ -686,19 +595,22 @@ async function sendFinal(env, chatId, game) {
   const w = players[0][1];
   let text = '━━━━━━━━━━━━━━━━━━━\n🏆 <b>بازی تمام شد!</b>\n━━━━━━━━━━━━━━━━━━━\n\n';
   text += '🎉 <b>برنده: ' + w.name + '</b>\n';
-  text += '🏆 امتیاز: ' + w.score + ' | ✅ ' + w.correct + ' | 🔥 ' + w.bestStreak + '\n\n';
+  text += '🏆 ' + w.score + ' امتیاز | ✅ ' + w.correct + ' درست | ❌ ' + w.wrong + ' غلط | 🔥 ' + w.bestStreak + ' استریک\n\n';
   text += '━━━━━━━━━━━━━━━━━━━\n📊 <b>رده‌بندی:</b>\n\n';
 
   const medals = ['🥇', '🥈', '🥉'];
   players.forEach(([id, p], i) => {
-    text += (medals[i] || '  ' + (i + 1) + '.') + ' <b>' + p.name + '</b> — 🏆' + p.score + ' ✅' + p.correct + ' ❌' + p.wrong + ' 🔥' + p.bestStreak + '\n';
+    text += (medals[i] || '  ' + (i + 1) + '.') + ' <b>' + p.name + '</b>\n';
+    text += '    🏆 ' + p.score + ' | ✅ ' + p.correct + ' | ❌ ' + p.wrong + ' | 🔥 ' + p.bestStreak + '\n\n';
   });
 
-  text += '\n━━━━━━━━━━━━━━━━━━━\n';
-  text += '🎮 برای بازی جدید: <code>@Gamebotsbssksbot</code> رو تو گپ تایپ کن!';
+  text += '━━━━━━━━━━━━━━━━━━━\n';
+  text += '🎮 بازی جدید: <code>@Gamebotsbssksbot</code>';
 
   game.state = 'idle';
   game.players = new Map();
 
-  await send(env, chatId, text, { inline_keyboard: [[{ text: '🔄 بازی جدید!', callback_data: 'new_game', style: 'primary' }]] });
+  await editMsg(env, chatId, game.gameMsgId, text,
+    { inline_keyboard: [[{ text: '🔄 بازی جدید!', callback_data: 'new_game', style: 'primary' }]] }
+  );
 }
