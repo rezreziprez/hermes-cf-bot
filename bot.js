@@ -288,8 +288,8 @@ function mainMenu(webAppUrl) {
   return {
     inline_keyboard: [
       [{ text: '🌟 باز کردن پنل', web_app: { url: webAppUrl } }],
-      [{ text: '🤖 مدل‌ها', callback_data: 'models' }, { text: '🔍 جستجو', callback_data: 'search_help' }],
-      [{ text: '🖼️ تصویر', callback_data: 'img_help' }, { text: '🌐 ترجمه', callback_data: 'tr_help' }],
+      [{ text: '🤖 مدل‌ها', callback_data: 'models', style: 'primary' }, { text: '🔍 جستجو', callback_data: 'search_help', style: 'primary' }],
+      [{ text: '🖼️ تصویر', callback_data: 'img_help', style: 'success' }, { text: '🌐 ترجمه', callback_data: 'tr_help', style: 'success' }],
       [{ text: '⚙️ تنظیمات', callback_data: 'settings' }, { text: '👤 پروفایل', callback_data: 'profile' }]
     ]
   };
@@ -299,24 +299,25 @@ function modelsKeyboard(currentModel) {
   const buttons = [];
   for (const [key, m] of Object.entries(MODELS)) {
     const check = m.id === currentModel ? '✅ ' : '  ';
-    buttons.push([{ text: check + m.icon + ' ' + m.name + '  │  ' + m.desc, callback_data: 'setmodel_' + key }]);
+    const style = m.id === currentModel ? 'success' : 'primary';
+    buttons.push([{ text: check + m.icon + ' ' + m.name + '  │  ' + m.desc, callback_data: 'setmodel_' + key, style }]);
   }
-  buttons.push([{ text: '🧠 Agent Mode (Auto)', callback_data: 'toggle_agent' }]);
+  buttons.push([{ text: '🧠 Agent Mode (Auto)', callback_data: 'toggle_agent', style: 'primary' }]);
   buttons.push([{ text: '🔙 بازگشت', callback_data: 'main_menu' }]);
   return { inline_keyboard: buttons };
 }
 
 function confirmClear() {
-  return { inline_keyboard: [[{ text: '✅ بله، پاک کن', callback_data: 'clear_yes' }, { text: '❌ نه', callback_data: 'main_menu' }]] };
+  return { inline_keyboard: [[{ text: '✅ بله، پاک کن', callback_data: 'clear_yes', style: 'danger' }, { text: '❌ نه', callback_data: 'main_menu', style: 'primary' }]] };
 }
 
 function imgModelsKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🎨 Realistic', callback_data: 'imgm_1' }, { text: '🎌 Anime', callback_data: 'imgm_2' }],
-      [{ text: '🧊 3D', callback_data: 'imgm_3' }, { text: '⚡ Turbo', callback_data: 'imgm_4' }],
-      [{ text: '🌸 Sana', callback_data: 'imgm_5' }, { text: '🚀 Schnell', callback_data: 'imgm_6' }],
-      [{ text: '⭐ Pro', callback_data: 'imgm_7' }, { text: '🎭 CablyAI', callback_data: 'imgm_8' }],
+      [{ text: '🎨 Realistic', callback_data: 'imgm_1', style: 'primary' }, { text: '🎌 Anime', callback_data: 'imgm_2', style: 'primary' }],
+      [{ text: '🧊 3D', callback_data: 'imgm_3', style: 'success' }, { text: '⚡ Turbo', callback_data: 'imgm_4', style: 'success' }],
+      [{ text: '🌸 Sana', callback_data: 'imgm_5', style: 'primary' }, { text: '🚀 Schnell', callback_data: 'imgm_6', style: 'primary' }],
+      [{ text: '⭐ Pro', callback_data: 'imgm_7', style: 'success' }, { text: '🎭 CablyAI', callback_data: 'imgm_8', style: 'success' }],
       [{ text: '🔙 بازگشت', callback_data: 'main_menu' }]
     ]
   };
@@ -325,10 +326,10 @@ function imgModelsKeyboard() {
 function settingsKeyboard(agentMode) {
   return {
     inline_keyboard: [
-      [{ text: '🤖 انتخاب مدل', callback_data: 'models' }],
-      [{ text: '🧠 Agent Mode  │  ' + (agentMode ? '✅ فعال' : '❌ غیرفعال'), callback_data: 'toggle_agent' }],
+      [{ text: '🤖 انتخاب مدل', callback_data: 'models', style: 'primary' }],
+      [{ text: '🧠 Agent Mode  │  ' + (agentMode ? '✅ فعال' : '❌ غیرفعال'), callback_data: 'toggle_agent', style: agentMode ? 'success' : 'danger' }],
       [{ text: '📝 پرامپت سفارشی', callback_data: 'prompt_help' }],
-      [{ text: '🧹 پاک‌سازی', callback_data: 'clear_confirm' }],
+      [{ text: '🧹 پاک‌سازی', callback_data: 'clear_confirm', style: 'danger' }],
       [{ text: '🔙 بازگشت', callback_data: 'main_menu' }]
     ]
   };
