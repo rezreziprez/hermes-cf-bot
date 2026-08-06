@@ -59,11 +59,14 @@ async function handleChatAPI(request, env, corsHeaders) {
     const { message, model } = await request.json();
     
     // Get AI response from 9router
-    const response = await fetch(env.OPENAI_BASE_URL + '/chat/completions', {
+    const apiBase = env.OPENAI_BASE_URL || 'https://9router-production-d4c69.up.railway.app/v1';
+    const apiKey = env.OPENAI_API_KEY || 'sk-957828c121e13776-aklyc5-7da3a2f9';
+    
+    const response = await fetch(apiBase + '/chat/completions', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json', 
-        'Authorization': 'Bearer ' + env.OPENAI_API_KEY 
+        'Authorization': 'Bearer ' + apiKey 
       },
       body: JSON.stringify({
         model: model || 'gemini/gemini-3.5-flash-lite',
