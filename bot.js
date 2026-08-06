@@ -33,10 +33,11 @@ const DEFAULT_MODEL = 'gemini/gemini-3.5-flash-lite';
 function mainMenu() {
   return {
     inline_keyboard: [
-      [{ text: '🤖 مدل‌ها', callback_data: 'models' }, { text: '🔍 جستجو', callback_data: 'search_help' }],
-      [{ text: '🖼️ تصویر', callback_data: 'img_help' }, { text: '🌐 ترجمه', callback_data: 'tr_help' }],
-      [{ text: '⚙️ تنظیمات', callback_data: 'settings' }, { text: '👤 پروفایل', callback_data: 'profile' }],
-      [{ text: '🧹 پاک‌سازی', callback_data: 'clear_confirm' }, { text: 'ℹ️ راهنما', callback_data: 'help' }]
+      [{ text: '🤖 مدل‌ها', callback_data: 'models' }, { text: '🔍 جستجوی وب', callback_data: 'search_help' }],
+      [{ text: '🖼️ تولید تصویر', callback_data: 'img_help' }, { text: '🌐 ترجمه', callback_data: 'tr_help' }],
+      [{ text: '👤 پروفایل من', callback_data: 'profile' }, { text: '⚙️ تنظیمات', callback_data: 'settings' }],
+      [{ text: '📝 پرامپت سفارشی', callback_data: 'prompt_help' }, { text: '🧹 پاک‌سازی', callback_data: 'clear_confirm' }],
+      [{ text: '━━━━━━━ راهنما ━━━━━━━', callback_data: 'help' }]
     ]
   };
 }
@@ -44,23 +45,25 @@ function mainMenu() {
 function modelsKeyboard(currentModel) {
   const buttons = [];
   for (const [key, m] of Object.entries(MODELS)) {
-    const check = m.id === currentModel ? '✅ ' : '';
-    buttons.push([{ text: check + m.icon + ' ' + m.name, callback_data: 'setmodel_' + key }]);
+    const check = m.id === currentModel ? '✅ ' : '  ';
+    buttons.push([{ text: check + m.icon + ' ' + m.name + '  │  ' + m.desc, callback_data: 'setmodel_' + key }]);
   }
-  buttons.push([{ text: '🔄 حالت Agent', callback_data: 'toggle_agent' }]);
-  buttons.push([{ text: '🔙 بازگشت', callback_data: 'main_menu' }]);
+  buttons.push([{ text: '━━━━━━━━━━━━━━━━━━━━━━', callback_data: 'noop' }]);
+  buttons.push([{ text: '🧠 Agent Mode (Auto)', callback_data: 'toggle_agent' }]);
+  buttons.push([{ text: '🔙 بازگشت به منو', callback_data: 'main_menu' }]);
   return { inline_keyboard: buttons };
 }
 
 function imgModelsKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🎨 Flux Realistic', callback_data: 'imgm_1' }, { text: '🎌 Flux Anime', callback_data: 'imgm_2' }],
-      [{ text: '🧊 Flux 3D', callback_data: 'imgm_3' }, { text: '⚡ Turbo', callback_data: 'imgm_4' }],
-      [{ text: '🌸 Sana', callback_data: 'imgm_5' }, { text: '🚀 Schnell', callback_data: 'imgm_6' }],
-      [{ text: '⭐ Flux Pro', callback_data: 'imgm_7' }, { text: '🎭 CablyAI', callback_data: 'imgm_8' }],
-      [{ text: '📐 Flux 2D', callback_data: 'imgm_9' }, { text: '✨ Spark', callback_data: 'imgm_10' }],
-      [{ text: '🔙 بازگشت', callback_data: 'main_menu' }]
+      [{ text: '🎨 Realistic  │  واقعی', callback_data: 'imgm_1' }, { text: '🎌 Anime  │  انیمه', callback_data: 'imgm_2' }],
+      [{ text: '🧊 3D  │  سه‌بعدی', callback_data: 'imgm_3' }, { text: '⚡ Turbo  │  سریع', callback_data: 'imgm_4' }],
+      [{ text: '🌸 Sana  │  هنری', callback_data: 'imgm_5' }, { text: '🚀 Schnell  │  سریع', callback_data: 'imgm_6' }],
+      [{ text: '⭐ Pro  │  حرفه‌ای', callback_data: 'imgm_7' }, { text: '🎭 CablyAI  │  خلاق', callback_data: 'imgm_8' }],
+      [{ text: '📐 2D  │  تخت', callback_data: 'imgm_9' }, { text: '✨ Spark  │  نورانی', callback_data: 'imgm_10' }],
+      [{ text: '━━━━━━━━━━━━━━━━━━━━━━', callback_data: 'noop' }],
+      [{ text: '🔙 بازگشت به منو', callback_data: 'main_menu' }]
     ]
   };
 }
@@ -68,7 +71,7 @@ function imgModelsKeyboard() {
 function confirmClear() {
   return {
     inline_keyboard: [
-      [{ text: '✅ بله، پاک کن', callback_data: 'clear_yes' }, { text: '❌ نه، لغو', callback_data: 'main_menu' }]
+      [{ text: '✅ بله، پاک کن', callback_data: 'clear_yes' }, { text: '❌ نه، لغو کن', callback_data: 'main_menu' }]
     ]
   };
 }
@@ -76,10 +79,12 @@ function confirmClear() {
 function settingsKeyboard(agentMode) {
   return {
     inline_keyboard: [
-      [{ text: '🤖 مدل: ' + (MODELS['1']?.name || 'Default'), callback_data: 'models' }],
-      [{ text: '🧠 Agent Mode: ' + (agentMode ? '✅ فعال' : '❌ غیرفعال'), callback_data: 'toggle_agent' }],
+      [{ text: '🤖 انتخاب مدل', callback_data: 'models' }],
+      [{ text: '🧠 Agent Mode  │  ' + (agentMode ? '✅ فعال' : '❌ غیرفعال'), callback_data: 'toggle_agent' }],
       [{ text: '📝 پرامپت سفارشی', callback_data: 'prompt_help' }],
-      [{ text: '🔙 بازگشت', callback_data: 'main_menu' }]
+      [{ text: '🧹 پاک‌سازی تاریخچه', callback_data: 'clear_confirm' }],
+      [{ text: '━━━━━━━━━━━━━━━━━━━━━━', callback_data: 'noop' }],
+      [{ text: '🔙 بازگشت به منو', callback_data: 'main_menu' }]
     ]
   };
 }
@@ -90,6 +95,10 @@ async function handleCallback(cb, env) {
   const msgId = cb.message.message_id;
   const data = cb.data;
   const name = cb.from.first_name || 'User';
+
+  if (data === 'noop') {
+    return answerCallback(env, cb.id);
+  }
 
   if (data === 'main_menu') {
     return editMessage(env, chatId, msgId, '🌟 **منوی اصلی Hermes Agent**\n\n━━━━━━━━━━━━━━━━━━━\n🤖 دستیار هوش مصنوعی شما\n🎨 ساخته شده توسط **iprez**\n━━━━━━━━━━━━━━━━━━━\n\nیکی از گزینه‌ها رو انتخاب کن:', mainMenu());
