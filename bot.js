@@ -287,7 +287,7 @@ const DEFAULT_MODEL = 'gemini/gemini-3.5-flash-lite';
 function mainMenu(webAppUrl) {
   return {
     inline_keyboard: [
-      [{ text: '🌟 باز کردن پنل', web_app: { url: webAppUrl } }],
+      [{ text: '🌟 Mini App', web_app: { url: 'https://tma-gcnrbcx4.r65.workers.dev' }, style: 'primary' }],
       [{ text: '🤖 مدل‌ها', callback_data: 'models', style: 'primary' }, { text: '🔍 جستجو', callback_data: 'search_help', style: 'primary' }],
       [{ text: '🖼️ تصویر', callback_data: 'img_help', style: 'success' }, { text: '🌐 ترجمه', callback_data: 'tr_help', style: 'success' }],
       [{ text: '⚙️ تنظیمات', callback_data: 'settings' }, { text: '👤 پروفایل', callback_data: 'profile' }]
