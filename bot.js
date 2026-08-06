@@ -457,7 +457,38 @@ async function handleUpdate(update, env) {
     return;
   }
 
-  if (msg.photo) return send(env, chatId, '📸 عکس دریافت شد!');
+  // Photo handling with vision
+  if (msg.photo) {
+    await typing(env, chatId);
+    try {
+      // Get photo file_id (largest size)
+      const photos = msg.photo.sort((a, b) => b.file_size - a.file_size);
+      const fileId = photos[0].file_id;
+      // Get file path from Telegram
+      const fileResp = await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/getFile?file_id=' + fileId);
+      const fileData = await fileResp.json();
+      if (fileData.ok) {
+        const imgUrl = 'https://api.telegram.org/file/bot' + env.TELEGRAM_BOT_TOKEN + '/' + fileData.result.file_path;
+        // Try vision API
+        const visionResp = await fetch('https://9router-production-d4c69.up.railway.app/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.OPENAI_API_KEY },
+          body: JSON.stringify({
+            model: 'gemini-3-pro-image',
+            messages: [{role:'user',content:[{type:'text',text:'Describe this image in detail.'},{type:'image_url',image_url:{url:imgUrl}}]}],
+            max_tokens: 1000, stream: false
+          })
+        });
+        const visionRaw = await visionResp.text();
+        var visionData;
+        try { visionData = JSON.parse(visionRaw); } catch(e) { visionData = {error: visionRaw.substring(0,200)}; }
+        const reply = visionData.choices?.[0]?.message?.content || (visionData.error ? JSON.stringify(visionData.error) : 'Could not analyze image.');
+        return send(env, chatId, '📸 **تحلیل عکس:**\n\n' + reply);
+
+      }
+    } catch (e) {}
+    return send(env, chatId, '📸 عکس دریافت شد. (Vision در دسترس نیست)');
+  }
   const text = msg.text ? msg.text.trim() : '';
   if (!text) return;
 
