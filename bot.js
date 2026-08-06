@@ -624,6 +624,30 @@ async function typing(env, chatId) { try { await fetch('https://api.telegram.org
 async function send(env, chatId, text) { const chunks = []; let t = text; while (t.length > 0) { if (t.length <= 4000) { chunks.push(t); break; } let c = t.lastIndexOf('\n', 4000); if (c === -1 || c < 2000) c = 4000; chunks.push(t.slice(0, c)); t = t.slice(c); } for (const chunk of chunks) { await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'Markdown' }) }); } }
 async function sendWithKeyboard(env, chatId, text, kb) { await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', reply_markup: kb }) }); }
 async function editMessage(env, chatId, msgId, text, kb) { try { await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/editMessageText', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, message_id: msgId, text, parse_mode: 'Markdown', reply_markup: kb }) }); } catch (e) {} }
+async function handleEnhance(env, chatId, text) {
+  const prompt = text.replace(/^\/enhance(@\w+)?\s*/, '').trim();
+  if (!prompt) return send(env, chatId, '🖼️ **Enhance تصویر**\n\nاستفاده: `/enhance [توضیح تصویر]`\n\nمثال:\n`/enhance a beautiful landscape`\n`/enhance portrait of a person`\n\n✅ کیفیت 4K، جزئیات بالا، وضوح بیشتر');
+
+  await typing(env, chatId);
+  const seed = Math.floor(Math.random() * 999999);
+  const enhanced = encodeURIComponent(prompt + ', ultra high quality, 4k, 8k, highly detailed, sharp focus, professional photography, masterpiece, best quality, ultra realistic, hyper detailed, cinematic lighting');
+  const url = 'https://image.pollinations.ai/prompt/' + enhanced + '?width=2048&height=2048&nologo=true&model=flux-pro&seed=' + seed + '&enhance=true';
+  
+  await sendPhoto(env, chatId, url, '✨ **Enhanced** — ' + prompt + '\n\n📐 2048x2048 | 🎨 Flux Pro | 🌟 کیفیت بالا');
+}
+
+async function handleUpscale(env, chatId, text) {
+  const prompt = text.replace(/^\/upscale(@\w+)?\s*/, '').trim();
+  if (!prompt) return send(env, chatId, '🔍 **Upscale تصویر**\n\nاستفاده: `/upscale [توضیح تصویر]`\n\nمثال:\n`/upscale a mountain view`\n`/upscale city at night`\n\n✅ افزایش رزولوشن تا 4K');
+
+  await typing(env, chatId);
+  const seed = Math.floor(Math.random() * 999999);
+  const upscaled = encodeURIComponent(prompt + ', ultra high resolution, 4k uhd, 8k, extremely detailed, crystal clear, sharp, noise free, clean image');
+  const url = 'https://image.pollinations.ai/prompt/' + upscaled + '?width=2048&height=2048&nologo=true&model=flux-pro&seed=' + seed;
+  
+  await sendPhoto(env, chatId, url, '🔍 **Upscaled** — ' + prompt + '\n\n📐 2048x2048 | 🎨 Flux Pro | 🔍 رزولوشن بالا');
+}
+
 async function sendPhoto(env, chatId, url, caption) { await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/sendPhoto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, photo: url, caption }) }); }
 async function answerCallback(env, id) { await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/answerCallbackQuery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: id }) }); }
 async function saveMsg(env, c, r, t) { await env.DB.prepare('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)').bind(c, r, t).run(); }
