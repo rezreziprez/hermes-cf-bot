@@ -670,7 +670,7 @@ async function onCb(cb, env) {
   if (d.startsWith('a_')) {
     if (gg.st !== 'playing' || !gg.cur) { await answerCb(env, cb.id, '⚠️'); return; }
     const parts = d.split('_');
-    const chosen = parseInt(parts[2]);
+    const chosen = parseInt(parts[1]);
     if (gg.ans.has(uid)) { await answerCb(env, cb.id, 'قبلاً جواب دادی!', true); return; }
     if (!gg.players.has(uid)) gg.players.set(uid, pl(n));
     const p = gg.players.get(uid);
