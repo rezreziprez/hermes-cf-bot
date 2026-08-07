@@ -36,7 +36,7 @@ async function edit(env, cid, mid, text, kb) {
   try { await tg(env, 'editMessageText', b); } catch (e) {}
 }
 
-async function cb(env, id, txt, alert) {
+async function answerCb(env, id, txt, alert) {
   try { await tg(env, 'answerCallbackQuery', { callback_query_id: id, text: txt || '', show_alert: !!alert }); } catch (e) {}
 }
 
@@ -499,7 +499,7 @@ async function onCb(cb, env) {
   // ===== INLINE JOIN =====
   if (d.startsWith('j_')) {
     const mode = d.replace('j_', '');
-    if (gg.st === 'playing') { await cb(env, cb.id, '⚠️ بازی در حال اجراست!', true); return; }
+    if (gg.st === 'playing') { await answerCb(env, cb.id, '⚠️ بازی در حال اجراست!', true); return; }
 
     const ng = fresh(cid);
     ng.st = 'waiting';
@@ -535,13 +535,13 @@ async function onCb(cb, env) {
         lobbyKb(ng.players)
       );
     }
-    await cb(env, cb.id, '✅ ' + n + ' وارد بازی شد!');
+    await answerCb(env, cb.id, '✅ ' + n + ' وارد بازی شد!');
     return;
   }
 
   // ===== MODE SELECT (from /quiz) =====
   if (d.startsWith('mode_')) {
-    if (gg.st !== 'setup') { await cb(env, cb.id, '⚠️ /quiz بزنید'); return; }
+    if (gg.st !== 'setup') { await answerCb(env, cb.id, '⚠️ /quiz بزنید'); return; }
     gg.mode = d.replace('mode_', '');
     if (gg.mode === 'quiz') {
       await edit(env, cid, mid,
@@ -565,13 +565,13 @@ async function onCb(cb, env) {
         lobbyKb(gg.players)
       );
     }
-    await cb(env, cb.id);
+    await answerCb(env, cb.id);
     return;
   }
 
   // ===== CATEGORY SELECT =====
   if (d.startsWith('sc_')) {
-    if (gg.st !== 'setup') { await cb(env, cb.id, '⚠️ /quiz بزنید'); return; }
+    if (gg.st !== 'setup') { await answerCb(env, cb.id, '⚠️ /quiz بزنید'); return; }
     gg.cat = d.replace('sc_', '');
     gg.st = 'setup';
     const cn = gg.cat === 'all' ? 'همه' : (CAT[gg.cat] || gg.cat);
@@ -582,13 +582,13 @@ async function onCb(cb, env) {
         [{ text: '15 🔥', callback_data: 'sr_15' }, { text: '20 💎', callback_data: 'sr_20' }]
       ]}
     );
-    await cb(env, cb.id);
+    await answerCb(env, cb.id);
     return;
   }
 
   // ===== ROUNDS SELECT =====
   if (d.startsWith('sr_')) {
-    if (gg.st !== 'setup') { await cb(env, cb.id, '⚠️ /quiz بزنید'); return; }
+    if (gg.st !== 'setup') { await answerCb(env, cb.id, '⚠️ /quiz بزنید'); return; }
     gg.rounds = parseInt(d.replace('sr_', ''));
     const cn = gg.cat === 'all' ? 'همه' : (CAT[gg.cat] || gg.cat);
     await edit(env, cid, mid,
@@ -598,13 +598,13 @@ async function onCb(cb, env) {
         [{ text: '20s 🔥', callback_data: 'st_20' }, { text: '30s 💎', callback_data: 'st_30' }]
       ]}
     );
-    await cb(env, cb.id);
+    await answerCb(env, cb.id);
     return;
   }
 
   // ===== TIMER SELECT → LOBBY =====
   if (d.startsWith('st_')) {
-    if (gg.st !== 'setup') { await cb(env, cb.id, '⚠️ /quiz بزنید'); return; }
+    if (gg.st !== 'setup') { await answerCb(env, cb.id, '⚠️ /quiz بزنید'); return; }
     gg.timer = parseInt(d.replace('st_', ''));
     gg.st = 'waiting';
     gg.players.set(uid, pl(n));
@@ -612,14 +612,14 @@ async function onCb(cb, env) {
       lobbyText('🎯 کوئیز', gg.players),
       lobbyKb(gg.players)
     );
-    await cb(env, cb.id, '✅ تنظیمات ذخیره شد!');
+    await answerCb(env, cb.id, '✅ تنظیمات ذخیره شد!');
     return;
   }
 
   // ===== JOIN =====
   if (d === 'join') {
-    if (gg.st !== 'waiting') { await cb(env, cb.id, '⚠️ بازی در انتظار نیست!'); return; }
-    if (gg.players.has(uid)) { await cb(env, cb.id, 'قبلاً پایه زدی!'); return; }
+    if (gg.st !== 'waiting') { await answerCb(env, cb.id, '⚠️ بازی در انتظار نیست!'); return; }
+    if (gg.players.has(uid)) { await answerCb(env, cb.id, 'قبلاً پایه زدی!'); return; }
     gg.players.set(uid, pl(n));
     const icons = { quiz: '🎯', truth: '🎲', word: '📝', speed: '⚡' };
     const names = { quiz: 'کوئیز', truth: 'جرأت یا حقیقت', word: 'حدس کلمه', speed: 'سریع‌ترین' };
@@ -627,25 +627,25 @@ async function onCb(cb, env) {
       lobbyText(icons[gg.mode] + ' ' + names[gg.mode], gg.players),
       lobbyKb(gg.players)
     );
-    await cb(env, cb.id, '✅ ' + n + ' اضافه شد!');
+    await answerCb(env, cb.id, '✅ ' + n + ' اضافه شد!');
     return;
   }
 
   // ===== CANCEL =====
   if (d === 'cancel') {
-    if (uid !== gg.host) { await cb(env, cb.id, 'فقط سازنده!', true); return; }
+    if (uid !== gg.host) { await answerCb(env, cb.id, 'فقط سازنده!', true); return; }
     if (gg.th) clearTimeout(gg.th);
     gg.st = 'idle';
     await edit(env, cid, mid, '❌ <b>بازی لغو شد.</b>');
-    await cb(env, cb.id, '❌ لغو شد');
+    await answerCb(env, cb.id, '❌ لغو شد');
     return;
   }
 
   // ===== GO =====
   if (d === 'go') {
-    if (uid !== gg.host) { await cb(env, cb.id, 'فقط سازنده!', true); return; }
-    if (gg.players.size < 2) { await cb(env, cb.id, 'حداقل 2 نفر!', true); return; }
-    if (gg.st !== 'waiting') { await cb(env, cb.id, '⚠️ /quiz بزنید', true); return; }
+    if (uid !== gg.host) { await answerCb(env, cb.id, 'فقط سازنده!', true); return; }
+    if (gg.players.size < 2) { await answerCb(env, cb.id, 'حداقل 2 نفر!', true); return; }
+    if (gg.st !== 'waiting') { await answerCb(env, cb.id, '⚠️ /quiz بزنید', true); return; }
 
     gg.st = 'playing';
 
@@ -662,16 +662,16 @@ async function onCb(cb, env) {
       await nextSpeed(env, cid, gg);
     }
 
-    await cb(env, cb.id, '🚀 شروع!');
+    await answerCb(env, cb.id, '🚀 شروع!');
     return;
   }
 
   // ===== QUIZ ANSWER =====
   if (d.startsWith('a_')) {
-    if (gg.st !== 'playing' || !gg.cur) { await cb(env, cb.id, '⚠️'); return; }
+    if (gg.st !== 'playing' || !gg.cur) { await answerCb(env, cb.id, '⚠️'); return; }
     const parts = d.split('_');
     const chosen = parseInt(parts[2]);
-    if (gg.ans.has(uid)) { await cb(env, cb.id, 'قبلاً جواب دادی!', true); return; }
+    if (gg.ans.has(uid)) { await answerCb(env, cb.id, 'قبلاً جواب دادی!', true); return; }
     if (!gg.players.has(uid)) gg.players.set(uid, pl(n));
     const p = gg.players.get(uid);
     const timeSec = Math.floor((Date.now() - gg.cur.time) / 1000);
@@ -682,10 +682,10 @@ async function onCb(cb, env) {
       const sb = Math.min(p.str * 2, 10);
       const pts = tb + sb + 5;
       p.score += pts; p.ok++; p.str++; p.best = Math.max(p.best, p.str);
-      await cb(env, cb.id, '✅ درست! +' + pts + ' (' + timeSec + 's)');
+      await answerCb(env, cb.id, '✅ درست! +' + pts + ' (' + timeSec + 's)');
     } else {
       p.bad++; p.str = 0;
-      await cb(env, cb.id, '❌ اشتباه!');
+      await answerCb(env, cb.id, '❌ اشتباه!');
     }
     if (gg.ans.size >= gg.players.size) {
       if (gg.th) clearTimeout(gg.th);
@@ -698,27 +698,27 @@ async function onCb(cb, env) {
 
   // ===== TRUTH ANSWER =====
   if (d === 'truth_next') {
-    if (gg.st !== 'playing') { await cb(env, cb.id, '⚠️'); return; }
+    if (gg.st !== 'playing') { await answerCb(env, cb.id, '⚠️'); return; }
     gg.idx++;
     if (gg.idx >= gg.rounds) { gg.st = 'finished'; await showFinal(env, cid, gg); }
     else await nextTruth(env, cid, gg);
-    await cb(env, cb.id);
+    await answerCb(env, cb.id);
     return;
   }
 
   // ===== SPEED ANSWER =====
   if (d.startsWith('sp_')) {
-    if (gg.st !== 'playing' || !gg.cur) { await cb(env, cb.id, '⚠️'); return; }
+    if (gg.st !== 'playing' || !gg.cur) { await answerCb(env, cb.id, '⚠️'); return; }
     const chosen = parseInt(d.split('_')[1]);
     if (!gg.players.has(uid)) gg.players.set(uid, pl(n));
     const p = gg.players.get(uid);
     const ok = chosen === gg.cur.c;
     if (ok) {
       p.score += 5; p.ok++; p.str++; p.best = Math.max(p.best, p.str);
-      await cb(env, cb.id, '✅ +5');
+      await answerCb(env, cb.id, '✅ +5');
     } else {
       p.bad++; p.str = 0;
-      await cb(env, cb.id, '❌');
+      await answerCb(env, cb.id, '❌');
     }
     // Speed: immediately next question
     gg.idx++;
@@ -731,11 +731,11 @@ async function onCb(cb, env) {
   // ===== WORD LETTER =====
   if (d.startsWith('wl_')) {
     // Word guess letter pressed - no action needed in current implementation
-    await cb(env, cb.id);
+    await answerCb(env, cb.id);
     return;
   }
   if (d.startsWith('report_')) {
-    await cb(env, cb.id, '🔴 گزارش ثبت شد. ممنون!', true);
+    await answerCb(env, cb.id, '🔴 گزارش ثبت شد. ممنون!', true);
     return;
   }
 
@@ -754,7 +754,7 @@ async function onCb(cb, env) {
         [{ text: '📝 حدس کلمه', callback_data: 'mode_word' }, { text: '⚡ سریع‌ترین', callback_data: 'mode_speed' }]
       ]}
     );
-    await cb(env, cb.id);
+    await answerCb(env, cb.id);
     return;
   }
   } catch (e) {
@@ -763,7 +763,7 @@ async function onCb(cb, env) {
       const mid2 = cb.message.message_id;
       await edit(env, cid2, mid2, '⚠️ خطایی پیش آمد. /quiz بزنید.');
     } catch (e2) {}
-    try { await cb(env, cb.id, '⚠️ خطا! دوباره تلاش کن.', true); } catch (e3) {}
+    try { await answerCb(env, cb.id, '⚠️ خطا! دوباره تلاش کن.', true); } catch (e3) {}
   }
 }
 
