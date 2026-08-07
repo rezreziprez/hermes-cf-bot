@@ -360,9 +360,9 @@ async function onInline(iq, env) {
     },
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎮 پایه‌ام! (1 نفر)', callback_data: 'j_' + mode, style: 'success' }],
-        [{ text: '🚀 شروع!', callback_data: 'go', style: 'primary' }],
-        [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
+        [{ text: '🎮 پایه‌ام! (1 نفر)', callback_data: 'j_' + mode }],
+        [{ text: '🚀 شروع!', callback_data: 'go' }],
+        [{ text: '❌ لغو', callback_data: 'cancel' }]
       ]
     }
   });
@@ -488,7 +488,8 @@ async function onMsg(msg, env) {
 // CALLBACK HANDLER
 // ============================================================
 async function onCb(cb, env) {
-  const cid = cb.message.chat.id;
+  try {
+    const cid = cb.message.chat.id;
   const d = cb.data;
   const uid = cb.from.id;
   const n = cb.from.first_name || 'بازیکن';
@@ -523,7 +524,7 @@ async function onCb(cb, env) {
           [{ text: '⚽ ورزش', callback_data: 'sc_sports' }, { text: '🎬 فیلم', callback_data: 'sc_movies' }],
           [{ text: '🎵 موسیقی', callback_data: 'sc_music' }, { text: '📖 ادبیات', callback_data: 'sc_literature' }],
           [{ text: '💻 تکنولوژی', callback_data: 'sc_technology' }],
-          [{ text: '🎯 همه', callback_data: 'sc_all', style: 'primary' }]
+          [{ text: '🎯 همه', callback_data: 'sc_all' }]
         ]}
       );
     } else {
@@ -551,7 +552,7 @@ async function onCb(cb, env) {
           [{ text: '⚽ ورزش', callback_data: 'sc_sports' }, { text: '🎬 فیلم', callback_data: 'sc_movies' }],
           [{ text: '🎵 موسیقی', callback_data: 'sc_music' }, { text: '📖 ادبیات', callback_data: 'sc_literature' }],
           [{ text: '💻 تکنولوژی', callback_data: 'sc_technology' }],
-          [{ text: '🎯 همه', callback_data: 'sc_all', style: 'primary' }]
+          [{ text: '🎯 همه', callback_data: 'sc_all' }]
         ]}
       );
     } else {
@@ -727,6 +728,12 @@ async function onCb(cb, env) {
   }
 
   // ===== REPORT =====
+  // ===== WORD LETTER =====
+  if (d.startsWith('wl_')) {
+    // Word guess letter pressed - no action needed in current implementation
+    await cb(env, cb.id);
+    return;
+  }
   if (d.startsWith('report_')) {
     await cb(env, cb.id, '🔴 گزارش ثبت شد. ممنون!', true);
     return;
@@ -750,6 +757,14 @@ async function onCb(cb, env) {
     await cb(env, cb.id);
     return;
   }
+  } catch (e) {
+    try {
+      const cid2 = cb.message.chat.id;
+      const mid2 = cb.message.message_id;
+      await edit(env, cid2, mid2, '⚠️ خطایی پیش آمد. /quiz بزنید.');
+    } catch (e2) {}
+    try { await cb(env, cb.id, '⚠️ خطا! دوباره تلاش کن.', true); } catch (e3) {}
+  }
 }
 
 // ============================================================
@@ -768,9 +783,9 @@ function lobbyText(title, players) {
 
 function lobbyKb(players) {
   return { inline_keyboard: [
-    [{ text: '🎮 پایه‌ام! (' + players.size + ' نفر)', callback_data: 'join', style: 'success' }],
-    [{ text: '🚀 شروع!', callback_data: 'go', style: 'primary' }],
-    [{ text: '❌ لغو', callback_data: 'cancel', style: 'danger' }]
+    [{ text: '🎮 پایه‌ام! (' + players.size + ' نفر)', callback_data: 'join' }],
+    [{ text: '🚀 شروع!', callback_data: 'go' }],
+    [{ text: '❌ لغو', callback_data: 'cancel' }]
   ]};
 }
 
@@ -799,10 +814,10 @@ async function nextQ(env, cid, gg) {
     e[3] + ' ' + q.a[3] + '\n\n' +
     '━━━━━━━━━━━━━━━━━━━',
     { inline_keyboard: [
-      [{ text: e[0] + ' ' + q.a[0], callback_data: 'a_x_0', style: 'primary' },
-       { text: e[1] + ' ' + q.a[1], callback_data: 'a_x_1', style: 'primary' }],
-      [{ text: e[2] + ' ' + q.a[2], callback_data: 'a_x_2', style: 'primary' },
-       { text: e[3] + ' ' + q.a[3], callback_data: 'a_x_3', style: 'primary' }]
+      [{ text: e[0] + ' ' + q.a[0], callback_data: 'a_0' },
+       { text: e[1] + ' ' + q.a[1], callback_data: 'a_1' }],
+      [{ text: e[2] + ' ' + q.a[2], callback_data: 'a_2' },
+       { text: e[3] + ' ' + q.a[3], callback_data: 'a_3' }]
     ]}
   );
 
@@ -835,8 +850,8 @@ async function nextTruth(env, cid, gg) {
     item + '\n\n' +
     '━━━━━━━━━━━━━━━━━━━',
     { inline_keyboard: [
-      [{ text: '➡️ بعدی', callback_data: 'truth_next', style: 'primary' }],
-      [{ text: '🏁 پایان بازی', callback_data: 'cancel', style: 'danger' }]
+      [{ text: '➡️ بعدی', callback_data: 'truth_next' }],
+      [{ text: '🏁 پایان بازی', callback_data: 'cancel' }]
     ]}
   );
 }
@@ -904,10 +919,10 @@ async function nextSpeed(env, cid, gg) {
     e[3] + ' ' + q.a[3] + '\n\n' +
     '━━━━━━━━━━━━━━━━━━━',
     { inline_keyboard: [
-      [{ text: e[0] + ' ' + q.a[0], callback_data: 'sp_0', style: 'primary' },
-       { text: e[1] + ' ' + q.a[1], callback_data: 'sp_1', style: 'primary' }],
-      [{ text: e[2] + ' ' + q.a[2], callback_data: 'sp_2', style: 'primary' },
-       { text: e[3] + ' ' + q.a[3], callback_data: 'sp_3', style: 'primary' }]
+      [{ text: e[0] + ' ' + q.a[0], callback_data: 'sp_0' },
+       { text: e[1] + ' ' + q.a[1], callback_data: 'sp_1' }],
+      [{ text: e[2] + ' ' + q.a[2], callback_data: 'sp_2' },
+       { text: e[3] + ' ' + q.a[3], callback_data: 'sp_3' }]
     ]}
   );
 }
@@ -947,6 +962,6 @@ async function showFinal(env, cid, gg) {
   gg.st = 'idle';
 
   await edit(env, cid, gg.msg, t,
-    { inline_keyboard: [[{ text: '🔄 بازی جدید!', callback_data: 'new_game', style: 'primary' }]] }
+    { inline_keyboard: [[{ text: '🔄 بازی جدید!', callback_data: 'new_game' }]] }
   );
 }
