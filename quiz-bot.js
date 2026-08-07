@@ -758,12 +758,13 @@ async function onCb(cb, env) {
     return;
   }
   } catch (e) {
+    const errText = e.message || String(e);
     try {
-      const cid2 = cb.message.chat.id;
-      const mid2 = cb.message.message_id;
-      await edit(env, cid2, mid2, '⚠️ خطایی پیش آمد. /quiz بزنید.');
+      const cid2 = cb.message ? cb.message.chat.id : null;
+      const mid2 = cb.message ? cb.message.message_id : null;
+      if (cid2 && mid2) await edit(env, cid2, mid2, '⚠️ خطا: ' + errText.substring(0, 100));
     } catch (e2) {}
-    try { await answerCb(env, cb.id, '⚠️ خطا! دوباره تلاش کن.', true); } catch (e3) {}
+    try { await answerCb(env, cb.id, '⚠️ ' + errText.substring(0, 50), true); } catch (e3) {}
   }
 }
 
